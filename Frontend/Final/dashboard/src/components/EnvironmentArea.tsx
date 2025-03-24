@@ -23,7 +23,7 @@ interface Environment {
   waterLevel: number;
   soilHumidity: number;
   steam: number;
-  datetime: string;
+  timestamp: string;
 }
 
 interface Event {
@@ -72,7 +72,7 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
   const fetchAllDateTimes = async () => {
     const response = await axios.get('http://localhost:5000/api/data');
     setAlleEnvironmentData(response.data);
-    const dateTimes = response.data.map((data: Environment) => data.datetime);
+    const dateTimes = response.data.map((data: Environment) => data.timestamp);
     setDateTimes(dateTimes);
   };
 
@@ -111,9 +111,9 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
     for (let i = allEnvironmentData.length - 1; i > 0; i--) {
       for (const key of Object.keys(allEnvironmentData[0]) as Array<
         // 'date' | 'temperature' | 'fluorescents' | 'co2Concentration' | 'irrigation'
-        'datetime' | 'temperature' | 'humidity' | 'light' | 'waterLevel' | 'soilHumidity' | 'steam'
+        'timestamp' | 'temperature' | 'humidity' | 'light' | 'waterLevel' | 'soilHumidity' | 'steam'
       >) {
-        if (key === 'datetime' || key === 'id') {
+        if (key === 'timestamp' || key === 'id') {
           // (key === 'date')
           continue;
         }
@@ -122,7 +122,7 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
             direction: 'up',
             text: `Rise in ${key}`,
             icon: icons[key],
-            date: allEnvironmentData[i].datetime,
+            date: allEnvironmentData[i].timestamp,
           });
         }
         if (allEnvironmentData[i][key] < allEnvironmentData[i - 1][key] * 0.9) {
@@ -130,7 +130,7 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
             direction: 'down',
             text: `Fall in ${key}`,
             icon: icons[key],
-            date: allEnvironmentData[i].datetime,
+            date: allEnvironmentData[i].timestamp,
           });
         }
       }
@@ -166,12 +166,12 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
         <Col span={8} style={{ textAlign: 'center' }}>
           <Select
             style={{ width: '100%' }}
-            value={currentEnvironmentData?.datetime}
+            value={currentEnvironmentData?.timestamp}
             onChange={handleTimeChange}
           >
-            {dateTimes.map((datetime) => (
-              <Option key={datetime} value={datetime}>
-                {datetime}
+            {dateTimes.map((timestamp) => (
+              <Option key={timestamp} value={timestamp}>
+                {timestamp}
               </Option>
             ))}
           </Select>
@@ -237,7 +237,7 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
           <EnvironmentStatisticsCard
             icon='date_range'
             text='Date'
-            value={<>{currentEnvironmentData?.datetime ?? 'No date'}</>}
+            value={<>{currentEnvironmentData?.timestamp ?? 'No date'}</>}
           />
         </Col>
       </Row>
