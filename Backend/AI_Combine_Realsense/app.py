@@ -17,16 +17,33 @@ from flask_marshmallow import Marshmallow
 from werkzeug.utils import secure_filename
 import socket
 
+# library for chatbot
+# from langchain_community.llms import GPT4All
+# from langchain.llms import llamacpp
+# from langchain.chains import LLMchain
+# from langchain_community.llms import llamacpp
+# from langchain_core.prompts import chat
+
+
+
 # Initialize Flask app and extensions
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:741852963Zuo@localhost:3306/sensor_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://DoJunKwon:password@smartfarm2025-smartfarm25.g.aivencloud.com:28350/sensor_DB'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
+
+# # Initialize Langchain
+# prompt_template = chat.ChatPromptTemplate.from_template("The user said : {user message} \n The bot should respond this")
+#
+# # Initialize chat bot model
+# # model_path = "models/Meta-Llama-3-8B-Instruct.Q4_K_S.gguf"
+# # llm = GPT4All(model_path)
 
 # Initialize folders
 SERVER_FOLDER = 'server'
@@ -39,6 +56,36 @@ os.makedirs(SERVER_RESULT_FOLDER, exist_ok=True)
 # Image directories for processing
 IMAGE_DIRECTORY = SERVER_ORIGINAL_FOLDER
 SAVE_DIRECTORY = SERVER_RESULT_FOLDER
+
+
+# Function to simulate real-time sensor data
+
+# @app.route("/chat", methods = ["POST"])
+# def chat():
+#     data = request.get_json()
+#     print(data)
+#     user_message = data["message"]
+#     # user_message = data.get("message")
+#
+#     if "temperature" in user_message:
+#         response = f"Temperature is {get_data['temperature']}°C"
+#     elif "humidity" in user_message:
+#         response = f"Humidity is {get_data['humidity']}%"
+#     elif "light" in user_message:
+#         response = f"Light is {get_data['light']} lux"
+#     elif "water" in user_message:
+#         response = f"Water level is {get_data['waterLevel']}%"
+#     elif "soil" in user_message:
+#         response = f"Soil humidity is {get_data['soilHumidity']}%"
+#     elif "steam" in user_message:
+#         response = f"Steam is {get_data['steam']}%"
+#     else:
+#         response = llm.chat(data["message"])
+#
+#     print(response)
+#     return jsonify({"response": response})
+
+
 
 
 # Get the local IP address
@@ -60,29 +107,37 @@ server_address = f"http://{local_ip}:5000"
 
 # Database model and schema
 class Environments(db.Model):
-    __tablename__ = 'real_iot'
+    __tablename__ = 'test_iot_2025'
+    # id = db.Column(db.Integer, primary_key=True)
+    # temperature = db.Column(db.Float(100))
+    # humidity = db.Column(db.Float(100))
+    # light = db.Column(db.Float(100))
+    # waterLevel = db.Column(db.Float(100))
+    # soilHumidity = db.Column(db.Float(100))
+    # steam = db.Column(db.Float(100))
+    # datetime = db.Column(db.DateTime, default=datetime.datetime.now)
     id = db.Column(db.Integer, primary_key=True)
-    temperature = db.Column(db.Float(100))
-    humidity = db.Column(db.Float(100))
-    light = db.Column(db.Float(100))
-    waterLevel = db.Column(db.Float(100))
-    soilHumidity = db.Column(db.Float(100))
-    steam = db.Column(db.Float(100))
-    datetime = db.Column(db.DateTime, default=datetime.datetime.now)
+    temperature = db.Column(db.Integer)
+    humidity = db.Column(db.Integer)
+    light = db.Column(db.Integer)
+    waterLevel = db.Column(db.Integer)
+    soilHumidity = db.Column(db.Integer)
+    steam = db.Column(db.Integer)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.now)
 
-    def __init__(self, temperature, humidity, light, waterLevel, soilHumidity, steam, datetime):
+    def __init__(self, temperature, humidity, light, waterLevel, soilHumidity, steam, timestamp):
         self.temperature = temperature
         self.humidity = humidity
         self.light = light
         self.waterLevel = waterLevel
         self.soilHumidity = soilHumidity
         self.steam = steam
-        self.datetime = datetime
+        self.tiimestamp =timestamp or datetime.datetime.now
 
 
 class DataSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'temperature', 'humidity', 'light', 'waterLevel', 'soilHumidity', 'steam', 'datetime')
+        fields = ('id', 'temperature', 'humidity', 'light', 'waterLevel', 'soilHumidity', 'steam', 'timestamp')
 
 
 environment_schema = DataSchema()

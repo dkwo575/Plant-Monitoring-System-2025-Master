@@ -12,6 +12,8 @@ import EnvironmentArea from '../components/EnvironmentArea.tsx';
 import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
 import mixpanel from 'mixpanel-browser';
+import ChatbotComponent from '../components/ChatbotComponent.tsx';
+import Chatbot from 'react-chatbot-kit';
 
 function BuildingPage() {
   const navigate = useNavigate();
@@ -76,16 +78,14 @@ function BuildingPage() {
             <Col span={24}>
               <Row>
                 <Col span={24} style={{ display: 'flex', gap: 8 }}>
-                  <Typography style={{ fontSize: 20 }}>
-                    Estimated Harvest Date(Fake Data):{'  '}
-                  </Typography>
+                  <Typography style={{ fontSize: 20 }}>Estimated Harvest Date():{'  '}</Typography>
                   <Typography style={{ fontSize: 20, color: theme.palette.primary6 }}>
                     {/* put tomato harvest time calculator using mmdetection model.
                     For example, After take picture and when their tomato looks half rippen. 
                     Farmer can take it
                     When the colour is green and their size is over certain amount, 
                     it need to wait around 2 weeks??? */}
-                    {dayjs('2023-08-04').format('MMM DD YYYY')}
+                    {dayjs('2025-08-04').format('MMM DD YYYY')}
                   </Typography>
                 </Col>
               </Row>
@@ -119,13 +119,16 @@ function BuildingPage() {
         </Col>
       </Row>
       <GraphArea
-        data={currentBuilding.data}
-        events={currentBuilding.events}
-        isAverage={true}
-        onDateChanged={(newDateRange: { startDate: string; endDate: string }) =>
-          setCurrentDateRange(newDateRange)
-        }
+      // data={currentBuilding.data}
+      // events={currentBuilding.events}
+      // isAverage={true}
+      // onDateChanged={(newDateRange: { startDate: string; endDate: string }) =>
+      //   setCurrentDateRange(newDateRange)
+      // }
       />
+      <div>
+        <ChatbotComponent />
+      </div>
     </>
   );
 }

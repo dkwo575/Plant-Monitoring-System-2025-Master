@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 // import EnvironmentArea from '../components/EnvironmentArea';
 import axios from 'axios';
 import { set } from 'lodash-es';
+import ChatbotComponent from '../components/ChatbotComponent';
 
 export default function DataPages() {
   const [iot, setiot] = useState([]);
@@ -68,7 +69,7 @@ export default function DataPages() {
     let filteredData = iot;
     if (startDate && endDate) {
       filteredData = filteredData.filter((data) => {
-        const dataDate = new Date(data.datetime);
+        const dataDate = new Date(data.timestamp);
         return dataDate >= new Date(startDate) && dataDate <= new Date(endDate);
       });
     }
@@ -203,6 +204,9 @@ export default function DataPages() {
             </table>
           </div>
         </div>
+      </div>
+      <div>
+        <ChatbotComponent />
       </div>
     </div>
   );
