@@ -6,6 +6,7 @@ import EventCard from './EventCard';
 import axios, { all } from 'axios';
 import { useEffect, useState } from 'react';
 import { set } from 'lodash-es';
+import { MaterialSymbol } from 'react-material-symbols';
 
 const { Option } = Select;
 
@@ -42,6 +43,9 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
   const [currentId, setCurrentId] = useState<number>(1);
   const [dateTimes, setDateTimes] = useState<string[]>([]);
 
+  // New things to add
+  const [dateMap, setDateMap] = useState<Map<string, number>>(new Map());
+
   const { Title } = Typography;
 
   const icons = {
@@ -64,10 +68,20 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
   //   fetchEnvironmentData();
   // });
 
+  // 잠시만 바꾸기
   const fetchEnvironmentDataID = async (id: number) => {
     const response = await axios.get(`http://localhost:5000/api/data/${id}`);
     setCurrentEnvironmentData(response.data);
   };
+
+  // const fetchEnvironmentDataID = async () => {
+  //   try {
+  //     const response = await axios.get(`http://localhost:5000/api/data/${currentId}`);
+  //     setCurrentEnvironmentData(response.data);
+  //   } catch (error) {
+  //     console.error('Error fetching data by ID:', error);
+  //   }
+  // };
 
   const fetchAllDateTimes = async () => {
     const response = await axios.get('http://localhost:5000/api/data');
@@ -93,10 +107,23 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
     }
   };
 
-  const handleTimeChange = (value: string) => {
-    const index = dateTimes.indexOf(value);
-    if (index !== -1) {
-      setCurrentId(index + 1);
+  // const handleTimeChange = (value: string) => {
+  //   const index = dateTimes.indexOf(value);
+  //   if (index !== -1) {
+  //     setCurrentId(index + 1);
+  //   }
+  // };
+
+  const handleTimeChange = async (selectedTimestamp: string) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/data/timestamp?timestamp=${encodeURIComponent(
+          selectedTimestamp,
+        )}`,
+      );
+      setCurrentEnvironmentData(response.data);
+    } catch (error) {
+      console.error('Error fetching data for selected timestamp:', error);
     }
   };
 
@@ -164,7 +191,7 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
           </Button>
         </Col>
         <Col span={8} style={{ textAlign: 'center' }}>
-          <Select
+          {/* <Select
             style={{ width: '100%' }}
             value={currentEnvironmentData?.timestamp}
             onChange={handleTimeChange}
@@ -174,8 +201,15 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
                 {timestamp}
               </Option>
             ))}
-          </Select>
+          </Select> */}
+          <DatePicker
+            showTime
+            format='YYYY-MM-DD HH:00:00'
+            onChange={(value, dateString) => handleTimeChange(dateString)}
+            style={{ width: '100%' }}
+          />
         </Col>
+
         <Col span={8} style={{ textAlign: 'right' }}>
           <Button onClick={handleNext} disabled={currentId >= allEnvironmentData.length}>
             Next
@@ -187,7 +221,7 @@ function EnvironmentArea(props: EnvironmentAreaProps) {
         <Col span={12}>
           <EnvironmentStatisticsCard
             icon='device_thermostat'
-            text='Tempurature'
+            text='Temperature'
             value={
               <>
                 {currentEnvironmentData?.temperature ?? 0} <sup>o</sup>C
