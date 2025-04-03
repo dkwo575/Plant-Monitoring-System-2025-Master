@@ -24,6 +24,14 @@ import socket
 # from langchain_community.llms import llamacpp
 # from langchain_core.prompts import chat
 
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain_community.llms import HuggingFaceHub
+from langchain_core.prompts import PromptTemplate
+from langchain_community.llms import huggingface_endpoint
+from langchain_experimental.sql import SQLDatabaseChain  # library for database
+from langchain_community.utilities.sql_database import SQLDatabase
+from langchain_huggingface import HuggingFaceEndpoint
 
 
 # Initialize Flask app and extensions
@@ -37,6 +45,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://DoJunKwon:password@smar
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
+
+mysql_uri = f"mysql+pymysql://DoJunKwon:password@smartfarm2025-smartfarm25.g.aivencloud.com:28350/sensor_DB"
 
 # # Initialize Langchain
 # prompt_template = chat.ChatPromptTemplate.from_template("The user said : {user message} \n The bot should respond this")
@@ -56,6 +66,40 @@ os.makedirs(SERVER_RESULT_FOLDER, exist_ok=True)
 # Image directories for processing
 IMAGE_DIRECTORY = SERVER_ORIGINAL_FOLDER
 SAVE_DIRECTORY = SERVER_RESULT_FOLDER
+
+# # Initialize Langchain
+os.environ['HUGGINGFACEHUB_API_TOKEN'] = 'token'
+huggingfaceAPI = 'token'
+repo_id = 'mistralai/Mistral-7B-Instruct-v0.3'
+
+
+# llm = HuggingFaceHub(repo_id = repo_id, huggingface_api_token = huggingfaceAPI )
+llm = HuggingFaceEndpoint(
+    repo_id=repo_id,
+    temperature = 0.5,
+    model_kwargs={"max_length": 128},
+    huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
+)
+
+db_langchain = SQLDatabase.from_uri(mysql_uri, include_tables=['lab_iot_2025'], sample_rows_in_table_info=2)
+db_chain = SQLDatabaseChain.from_llm(llm, db_langchain, verbose = True)
+
+# template = """ Quenstion : {user message} \n Answer : {bot response}"""
+template = """Question: {question}
+
+Answer: Let's think step by step."""
+promt_template = PromptTemplate.from_template(template)
+
+
+
+# llm_chain = LLMChain(llm = llm, prompt_template = promt_template)
+llm_chain = promt_template | llm
+
+question = "Who is Donald Trump?"
+# responses = llm.chain.invoke({"question " : question})
+responses = llm_chain.invoke({"question": question})
+
+print(responses)
 
 
 # Function to simulate real-time sensor data
