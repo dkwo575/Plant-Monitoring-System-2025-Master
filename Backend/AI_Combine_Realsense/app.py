@@ -151,7 +151,7 @@ server_address = f"http://{local_ip}:5000"
 
 # Database model and schema
 class Environments(db.Model):
-    __tablename__ = 'test_iot_2025'
+    __tablename__ = 'lab_iot_2025'
     # id = db.Column(db.Integer, primary_key=True)
     # temperature = db.Column(db.Float(100))
     # humidity = db.Column(db.Float(100))
@@ -192,6 +192,48 @@ environments_schema = DataSchema(many=True)
 @app.route('/')
 def welcome():
     return "<h1>Welcome to Smart Farm</h1>"
+    
+
+# simple chatbot
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_input = request.json["message"]
+
+    import re
+    match = re.search(r"(\d{2}/\d{2}/\d{2})[, ]+(\d{1,2}:\d{2}(?:am|pm)?)", user_input)
+
+    if match:
+        date_str, time_str = match.groups()
+
+        # Convert date/time to proper format
+        from datetime import datetime
+        date_obj = datetime.strptime(date_str, "%d/%m/%y")
+        time_obj = datetime.strptime(time_str, "%I:%M%p")
+
+        # Combine into full datetime format
+        timestamp = datetime.combine(date_obj, time_obj.time())
+
+        # Identify the measurement type (temperature, humidity, etc.)
+        keywords = ["temperature", "humidity", "light", "waterLevel", "soilHumidity", "steam"]
+        measurement = next((word for word in keywords if word in user_input.lower()), None)
+
+        if measurement:
+            # Query SQLAlchemy instead of using cursor
+            result = Environments.query.filter_by(timestamp=timestamp).first()
+
+            if result:
+                value = getattr(result, measurement)  # Dynamically get the correct column value
+                reply = f"The {measurement} value on {date_str}, {time_str} is {value}."
+            else:
+                reply = "I couldn't find the data for that date and time."
+        else:
+            reply = "Please specify what measurement you want (temperature, humidity, etc.)."
+
+    else:
+        reply = llm(user_input)  # Use GPT4All for general questions
+
+    return jsonify({"reply": reply})
+
 
 
 @app.route('/api/data', methods=['GET'])
