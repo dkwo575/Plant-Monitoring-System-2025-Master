@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import EnvironmentArea from '../components/EnvironmentArea.tsx';
 import dayjs from 'dayjs';
 import mixpanel from 'mixpanel-browser';
+import ChatbotComponent from '../components/ChatbotComponent.tsx';
 
 function PlantPage() {
   const { plantId } = useParams();
@@ -92,7 +93,7 @@ function PlantPage() {
                 <Col span={24} style={{ display: 'flex', gap: 8 }}>
                   <Typography style={{ fontSize: 20 }}>Estimated Harvest Date:{'  '}</Typography>
                   <Typography style={{ fontSize: 20, color: theme.palette.primary6 }}>
-                    {dayjs('2023-08-09').format('MMM DD YYYY')}
+                    {dayjs('2025-08-09').format('MMM DD YYYY')}
                   </Typography>
                 </Col>
               </Row>
@@ -197,6 +198,9 @@ function PlantPage() {
           setCurrentDateRange(newDateRange)
         }
       />
+      <div>
+        <ChatbotComponent />
+      </div>
     </>
   );
 }

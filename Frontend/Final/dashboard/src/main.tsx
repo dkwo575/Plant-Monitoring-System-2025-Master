@@ -13,7 +13,11 @@ import '@fontsource/plus-jakarta-sans';
 import 'react-material-symbols/dist/outlined.css';
 import { randomiseData } from './mock-data-generation/dataRandomiser';
 import ImagePage from './pages/ImagePage';
+import AdministrationPage from './pages/AdministrationPage';
+import AdminLoginPage from './pages/AdminLoginPage';
 import CapturePage from './pages/CapturePage';
+import ChatbotComponent from './components/ChatbotComponent';
+import AddRuleForm from './components/AddRuleFrom';
 
 const router = createBrowserRouter([
   {
@@ -47,6 +51,18 @@ const router = createBrowserRouter([
           {
             path: '/image',
             element: <ImagePage />,
+          },
+          {
+            path: '/admin-login',
+            element: <AdminLoginPage />,
+          },
+          {
+            path: '/admin',
+            element: <AdministrationPage />,
+          },
+          {
+            path: '/add-rule',
+            element: <AddRuleForm />,
           },
           // {
           //   path: '/capture',

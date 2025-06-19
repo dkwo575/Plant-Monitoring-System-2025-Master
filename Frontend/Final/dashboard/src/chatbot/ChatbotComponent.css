@@ -1,0 +1,73 @@
+.react-chatbot-kit-chat-container {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  min-height: 0 !important;
+}
+
+.react-chatbot-kit-chat-inner-container {
+  flex: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  min-height: 0 !important;
+}
+
+.react-chatbot-kit-chat-message-container {
+  flex-grow: 1 !important;
+  overflow-y: auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  min-height: 0 !important;
+  max-height: calc(100% - 80px) !important; /* Reserve space for input */
+}
+
+.react-chatbot-kit-chat-input {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important; /* Prevent input from shrinking */
+  height: 60px !important; /* Fixed height */
+  padding: 10px !important;
+  font-size: 16px !important;
+  margin-top: auto !important; /* Push to bottom */
+}
+
+.react-chatbot-kit-chat-input input {
+  font-size: 16px !important;
+  padding: 10px !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+  border: 1px solid #ddd !important;
+  border-radius: 5px !important;
+}
+
+.react-chatbot-kit-chat-btn-send {
+  height: 100% !important;
+  width: 50px !important;
+  font-size: 18px !important;
+  flex-shrink: 0 !important;
+}
+
+.react-chatbot-kit-chat-bot-message,
+.react-chatbot-kit-user-chat-message {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+  padding: 12px 16px !important;
+  margin-bottom: 8px !important;
+}
+
+/* Ensure the chatbot input area is always visible */
+.react-chatbot-kit-chat-input-container {
+  flex-shrink: 0 !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px !important;
+  background-color: white !important;
+  border-top: 1px solid #eee !important;
+}

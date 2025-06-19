@@ -477,8 +477,12 @@ interface SensorData {
   timestamp: string;
 }
 
+// Define time period options
+type TimePeriod = 'daily' | 'weekly' | 'monthly' | 'all';
+
 const SensorChart: React.FC = () => {
   const [sensorData, setSensorData] = useState<SensorData[]>([]);
+  const [filteredData, setFilteredData] = useState<SensorData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSensors, setSelectedSensors] = useState<string[]>([
@@ -489,6 +493,7 @@ const SensorChart: React.FC = () => {
     'soilHumidity',
     'steam',
   ]);
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
 
   // Fetch data from backend
   useEffect(() => {
@@ -496,6 +501,7 @@ const SensorChart: React.FC = () => {
       try {
         const response = await axios.get('http://localhost:5000/api/data');
         setSensorData(response.data);
+        setFilteredData(response.data); // Initially show all data
         setLoading(false);
       } catch (err) {
         setError('Failed to fetch sensor data');
@@ -512,6 +518,41 @@ const SensorChart: React.FC = () => {
     // Cleanup interval on component unmount
     return () => clearInterval(intervalId);
   }, []);
+
+  // Filter data based on selected time period
+  useEffect(() => {
+    if (sensorData.length === 0) return;
+
+    const now = new Date();
+    const filterDate = new Date();
+
+    switch (timePeriod) {
+      case 'daily':
+        // Set to start of current day
+        filterDate.setHours(0, 0, 0, 0);
+        break;
+      case 'weekly':
+        // Set to 7 days ago
+        filterDate.setDate(now.getDate() - 7);
+        break;
+      case 'monthly':
+        // Set to 30 days ago
+        filterDate.setDate(now.getDate() - 30);
+        break;
+      case 'all':
+      default:
+        // Show all data
+        setFilteredData(sensorData);
+        return;
+    }
+
+    const filtered = sensorData.filter((data) => {
+      const dataDate = new Date(data.timestamp);
+      return dataDate >= filterDate;
+    });
+
+    setFilteredData(filtered);
+  }, [timePeriod, sensorData]);
 
   // Color scheme for sensor lines
   const sensorColors: { [key: string]: string } = {
@@ -538,12 +579,48 @@ const SensorChart: React.FC = () => {
     );
   };
 
+  // Time period change handler
+  const handleTimePeriodChange = (period: TimePeriod) => {
+    setTimePeriod(period);
+  };
+
   if (loading) return <div>Loading sensor data...</div>;
   if (error) return <div>Error: {error}</div>;
 
   return (
     <div className='sensor-chart-container'>
       <h2>Smart Farm Sensor Data</h2>
+
+      {/* Time Period Selection */}
+      <div className='time-period-selection'>
+        <span>Time Period: </span>
+        <div className='button-group'>
+          <button
+            className={`time-button ${timePeriod === 'daily' ? 'active' : ''}`}
+            onClick={() => handleTimePeriodChange('daily')}
+          >
+            Daily
+          </button>
+          <button
+            className={`time-button ${timePeriod === 'weekly' ? 'active' : ''}`}
+            onClick={() => handleTimePeriodChange('weekly')}
+          >
+            Weekly
+          </button>
+          <button
+            className={`time-button ${timePeriod === 'monthly' ? 'active' : ''}`}
+            onClick={() => handleTimePeriodChange('monthly')}
+          >
+            Monthly
+          </button>
+          <button
+            className={`time-button ${timePeriod === 'all' ? 'active' : ''}`}
+            onClick={() => handleTimePeriodChange('all')}
+          >
+            All Time
+          </button>
+        </div>
+      </div>
 
       {/* Sensor Selection Toggles */}
       <div className='sensor-toggles'>
@@ -568,7 +645,7 @@ const SensorChart: React.FC = () => {
 
       {/* Responsive Chart */}
       <ResponsiveContainer width='100%' height={400}>
-        <LineChart data={sensorData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+        <LineChart data={filteredData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
           <CartesianGrid strokeDasharray='3 3' />
           <XAxis
             dataKey='timestamp'
@@ -603,9 +680,56 @@ const SensorChart: React.FC = () => {
 
       {/* Additional Chart Information */}
       <div className='chart-info'>
-        <p>Total Records: {sensorData.length}</p>
+        <p>Total Records: {filteredData.length}</p>
         <p>Last Updated: {new Date().toLocaleString()}</p>
+        <p>
+          Showing:{' '}
+          {timePeriod === 'all'
+            ? 'All Data'
+            : timePeriod === 'daily'
+            ? 'Last 24 Hours'
+            : timePeriod === 'weekly'
+            ? 'Last 7 Days'
+            : 'Last 30 Days'}
+        </p>
       </div>
+
+      {/* Add some basic CSS for the time period buttons */}
+      <style tsx>{`
+        .time-period-selection {
+          margin: 15px 0;
+          display: flex;
+          align-items: center;
+        }
+        .button-group {
+          display: inline-flex;
+          margin-left: 10px;
+        }
+        .time-button {
+          padding: 8px 12px;
+          margin-right: 5px;
+          border: 1px solid #ccc;
+          background-color: #f8f8f8;
+          cursor: pointer;
+          border-radius: 4px;
+        }
+        .time-button.active {
+          background-color: #007bff;
+          color: white;
+          border-color: #007bff;
+        }
+        .sensor-toggles {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 15px;
+        }
+        .sensor-toggle {
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 };

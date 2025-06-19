@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import EnvironmentArea from '../components/EnvironmentArea';
 import dayjs from 'dayjs';
 import mixpanel from 'mixpanel-browser';
+import ChatbotComponent from '../components/ChatbotComponent.tsx';
 
 function PlotPage() {
   const navigate = useNavigate();
@@ -88,7 +89,7 @@ function PlotPage() {
                 <Col span={24} style={{ display: 'flex', gap: 8 }}>
                   <Typography style={{ fontSize: 20 }}>Estimated Harvest Date:{'  '}</Typography>
                   <Typography style={{ fontSize: 20, color: theme.palette.primary6 }}>
-                    {dayjs('2023-08-06').format('MMM DD YYYY')}
+                    {dayjs('2025-08-06').format('MMM DD YYYY')}
                   </Typography>
                 </Col>
               </Row>
@@ -129,6 +130,9 @@ function PlotPage() {
           setCurrentDateRange(newDateRange)
         }
       />
+      <div>
+        <ChatbotComponent />
+      </div>
     </>
   );
 }
