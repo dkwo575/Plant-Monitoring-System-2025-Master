@@ -42,6 +42,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain.text_splitter import CharacterTextSplitter
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_mistralai import ChatMistralAI
 
 from langchain.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -75,16 +76,16 @@ load_dotenv()
 openaikey = os.getenv('OPENAI_API_KEY')
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://DoJunKwon@smartfarm2025-smartfarm25.g.aivencloud.com:28350/sensor_DB'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://DoJunKwon:/sensor_DB'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
-mysql_uri = f"mysql+pymysql://DoJunKwon@smartfarm2025-smartfarm25.g.aivencloud.com:28350/sensor_DB"
+mysql_uri = f"mysql+pymysql://DoJunKwon:/sensor_DB"
 
 
 # # Initialize Langchain
-os.environ['HUGGINGFACEHUB_API_TOKEN'] = 'Mytoken'
-huggingfaceAPI = 'Mytoken'
+os.environ['HUGGINGFACEHUB_API_TOKEN'] = 'pw'
+huggingfaceAPI = 'pw'
 repo_id = 'mistralai/Mistral-7B-Instruct-v0.3'
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -261,7 +262,7 @@ class Environments(db.Model):
         self.waterLevel = waterLevel
         self.soilHumidity = soilHumidity
         self.steam = steam
-        self.tiimestamp =timestamp or datetime.datetime.now
+        self.timestamp =timestamp or datetime.datetime.now
 
 
 class DataSchema(ma.Schema):
@@ -282,7 +283,6 @@ db_sql = SQLDatabase.from_uri(mysql_uri)
 llm_openai = ChatOpenAI(model_name ="gpt-3.5-turbo", temperature=0)
 dbsql_chain = SQLDatabaseChain.from_llm(llm_openai, db_sql, verbose=True, return_intermediate_steps=False)
 
-db_sql = SQLDatabase.from_uri(mysql_uri)
 # 1.db
 query = "SELECT * FROM lab_data_2025"
 
@@ -334,10 +334,23 @@ chain_sql = (
 # -----------------------------
 # ------------------------------- LLM for control sensor or motor using LLM -------------
 
-llm3 = HuggingFaceHub(
-    repo_id="meta-llama/Llama-3.1-8B-Instruct",
-    model_kwargs={"temperature": 0.5, "max_length": 100}
+repo_id_mistral = "mistralai/Mistral-7B-Instruct-v0.2"
+repo_id_llama = "meta-llama/Llama-3.1-8B-Instruct"
+
+# how can
+
+llm3 = HuggingFaceEndpoint(
+    repo_id=repo_id_llama,
+    model_kwargs={"max_length": 128},
+    temperature=0.5,
+    huggingfacehub_api_token= huggingfaceAPI,
 )
+
+llm_mistralai = ChatMistralAI(model = repo_id_mistral, temperature=0.5, max_tokens=128, mistral_api_key = huggingfaceAPI)
+#  os.environ["HUGGINGFACEHUB_API_TOKEN"]
+
+# llm_chain = prompt | llm
+# print(llm_chain.invoke({"question": question}))
 
 
 
@@ -370,7 +383,7 @@ llm3 = HuggingFaceHub(
 # print(response2)
 
 # Replace this with the actual IP address of your ESP32
-ESP32_IP = 'http://192.168.137.238' # f"http://{local_ip}:60"
+ESP32_IP = 'http://10.106.190.88:60' #'http://192.168.137.238' # f"http://{local_ip}:60"
 
 # store rule in memory for now
 current_rules = []
@@ -434,56 +447,92 @@ def chat_simple():
 #
 #
 
-def parse_condition(command, sensor_data):
-    pattern = re.search(r'temperature\s*<\s*(\d+)', command, re.I)
-    if pattern:
-        threshold = int(pattern.group(1))
-        current_temp = sensor_data.get("temperature", 100)
-        return "on" if current_temp < threshold else "off"
-    return None
+   # ------------------------ Turn on and off motor using button --------------
+
+    # @app.route('/api/motor/on', methods=['POST'])
+    # def motor_on():
+    #     requests.get(f"{ESP32_IP}/motor/on")
+    #     return jsonify({"message": "Motor turned ON"})
+    #
+    # @app.route('/api/motor/off', methods=['POST'])
+    # def motor_off():
+    #     requests.get(f"{ESP32_IP}/motor/off")
+    #     return jsonify({"message": "Motor turned OFF"})
+
+@app.route('/api/motor/<state>', methods = ['GET'])
+def motor_control(state):
+    try:
+        requests.get(f"{ESP32_IP}/motor/{state}")
+        return jsonify({'status': f"Motor turned {state}"})
+    except:
+        return jsonify({'status': 'Failed to reach ESP32 and check'}), 500
+        print("Failed to reach ESP32 and check the connection.")
+
+    # ----------------------------------- Turn on and off LED using button ---------------
+
+    # @app.route('/api/led/on', methods=['POST'])
+    # def led_on():
+    #     requests.get(f"{ESP32_IP}/led/on")
+    #     return jsonify({"message": "LED turned ON"})
+    #
+    # @app.route('/api/led/off', methods = ['POST'])
+    # def led_off():
+    #     requests.get(f"{ESP32_IP}/led/off")
+    #     return jsonify({"message": "LED turned OFF"})
+
+@app.route('/api/led/<state>', methods = ['GET'])
+def led_control(state):
+    try:
+        requests.get(f"{ESP32_IP}/led/{state}")
+        return jsonify({'status': f"LED turned {state}"})
+    except:
+        return jsonify({'status': 'Failed to reach ESP32'}), 500
+        print("Failed to reach ESP32 and check the LED connection.")
 
 
-# @app.route('/api/admin_chat', methods=['POST'])
-# def admin_chat():
-#     global current_rules
-#     data = request.json
-#     question = data.get("question")
-#
-#     system_prompt = """
-# You are a smart IoT rule assistant. Extract condition and action from admin command.
-#
-# Respond in JSON like:
-# {"condition": "temperature < 25", "action": "motor_on"}
-#
-# Supported actions: motor_on, motor_off, fan_on, fan_off.
-#
-# ONLY RETURN JSON.
-# """
-#
-#     prompt = system_prompt + "\nCommand: " + question
-#
-#     result = llm.invoke(prompt)
-#
-#     try:
-#         rule = json.loads(result)
-#         current_rules.append(rule)
-#         return jsonify({"answer": "Rule added successfully", "rule": rule})
-#     except Exception as e:
-#         return jsonify({"answer": "Failed to parse rule", "error": str(e)})
-#
-# @app.route('/api/get_rules', methods=['GET'])
-# def get_rules():
-#     return jsonify(current_rules)
-#
-# @app.route('/api/motor/on', methods=['POST'])
-# def motor_on():
-#     requests.get(f"{ESP32_IP}/motor/on")
-#     return jsonify({"message": "Motor turned ON"})
-#
-# @app.route('/api/motor/off', methods=['POST'])
-# def motor_off():
-#     requests.get(f"{ESP32_IP}/motor/off")
-#     return jsonify({"message": "Motor turned OFF"})
+
+
+
+
+# -------------------------------- admin chat Version2 -----------------
+
+@app.route('/api/admin_chat_V2', methods=['POST'])
+def admin_chat_V2():
+    global current_rules
+    data = request.json
+    question = data.get("question")
+
+    system_prompt = """
+You are a smart IoT rule assistant. Extract condition and action from admin command.
+
+Respond in JSON like:
+{"condition": "temperature < 25", "action": "motor_on"}
+
+Supported actions: motor_on, motor_off, fan_on, fan_off.
+
+ONLY RETURN JSON.
+"""
+
+    prompt = system_prompt + "\nCommand: " + question
+    # llm_chain3 = prompt | llm3
+    # print(llm_chain.invoke({"question": question}))
+
+    # result = llm3.invoke(llm_chain3)
+    result = llm_openai.invoke(prompt)
+
+    try:
+        rule = json.loads(result)
+        current_rules.append(rule)
+        return jsonify({"answer": "Rule added successfully", "rule": rule})
+    except Exception as e:
+        return jsonify({"answer": "Failed to parse rule", "error": str(e)})
+
+@app.route('/api/get_rules', methods=['GET'])
+def get_rules():
+    return jsonify(current_rules)
+
+
+# --------------------------- admin chat version 1----------------------
 
 @app.route('/api/add_condition', methods=['POST'])
 def add_condition():
@@ -492,45 +541,209 @@ def add_condition():
     print("Current Conditions:", conditions)
     return jsonify({"status": "condition added"})
 
+def parse_condition(command, sensor_data):
+    # Define patterns and actions
+    condition_patterns = [
+        ('temperature', r'temperature\s*(<=|>=|<|>)\s*(\d+)'),
+        ('humidity', r'humidity\s*(<=|>=|<|>)\s*(\d+)'),
+        ('light', r'light\s*(<=|>=|<|>)\s*(\d+)'),
+        ('soil_humidity', r'soil humidity\s*(<=|>=|<|>)\s*(\d+)'),
+        ('water_level', r'water level\s*(<=|>=|<|>)\s*(\d+)'),
+        ('steam', r'steam\s*(<=|>=|<|>)\s*(\d+)'),
+    ]
 
+    for key, pattern in condition_patterns:
+        match = re.search(pattern, command, re.I)
+        if match:
+            operator = match.group(1)
+            threshold = int(match.group(2))
+            current_value = sensor_data.get(key)
+
+            if current_value is None:
+                continue
+
+                # Perform the actual comparison
+            # if operator == '<' and current_value < threshold:
+            #     return "on", f"{key} ({current_value}) is less than {threshold}"
+            # elif operator == '>' and current_value > threshold:
+            #     return "on", f"{key} ({current_value}) is greater than {threshold}"
+            # elif operator == '<=' and current_value <= threshold:
+            #     return "on", f"{key} ({current_value}) is less than or equal to {threshold}"
+            # elif operator == '>=' and current_value >= threshold:
+            #     return "on", f"{key} ({current_value}) is greater than or equal to {threshold}"
+            # else:
+            #     return "off", f"{key} ({current_value}) does not meet the condition ({operator} {threshold})"
+
+                # Perform the actual comparison
+            condition_met = False
+            if operator == '<' and current_value < threshold:
+                condition_met = True
+            elif operator == '>' and current_value > threshold:
+                condition_met = True
+            elif operator == '<=' and current_value <= threshold:
+                condition_met = True
+            elif operator == '>=' and current_value >= threshold:
+                condition_met = True
+
+            # Determine action based on command intent and condition
+            if condition_met:
+                if any(word in command.lower() for word in ['turn on', 'start', 'activate', 'enable']):
+                    return "on", f"{key} ({current_value}) meets condition ({operator} {threshold})"
+                elif any(word in command.lower() for word in ['turn off', 'stop', 'deactivate', 'disable']):
+                    return "off", f"{key} ({current_value}) meets condition ({operator} {threshold})"
+                else:
+                    # Default to 'on' if condition is met but no clear action specified
+                    return "on", f"{key} ({current_value}) meets condition ({operator} {threshold})"
+            else:
+                # Condition not met, return opposite action or no action
+                if any(word in command.lower() for word in ['turn on', 'start', 'activate', 'enable']):
+                    return "off", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+                elif any(word in command.lower() for word in ['turn off', 'stop', 'deactivate', 'disable']):
+                    return "on", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+                else:
+                    return "off", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+
+            return None, None  # No matching condition
 
 
 @app.route('/api/admin_chat', methods=['POST'])
 def admin_chat():
-    question = request.json.get("question")
+    data = request.json
+    user_input = data.get('question', '') or data.get('text', '')
 
-    # Get latest sensor values
-    rows = db_sql.run_no_throw("SELECT * FROM lab_data_2025 ORDER BY id DESC LIMIT 1")
-    if not rows or not rows.rows:
-        return jsonify({'answer': "No sensor data available."})
+    # Get latest sensor data using ORM
+    latest_data = Environments.query.order_by(Environments.id.desc()).first()
+    if not latest_data:
+        return jsonify({'answer': 'No sensor data available or database error.'})
 
-    sensor_data = dict(zip(rows.columns, rows.rows[0]))
+    if isinstance(latest_data, str):
+        print("DB Error:", latest_data)
+        return jsonify({'answer': f"Database error: {latest_data}"})
 
-    # Generate LLM response
-    llm_prompt = (
-        f"Sensor reading: {sensor_data}. Based on this, analyze the command: '{question}' "
-        "and respond whether motor should turn 'on' or 'off'."
-    )
-    response = llm3(llm_prompt)
+    # sensor_data = dict(zip(results.columns, results.rows[0]))
+
+    sensor_data = {
+        'temperature': latest_data.temperature,
+        'humidity': latest_data.humidity,
+        'light': latest_data.light,
+        'soil_humidity': latest_data.soilHumidity,
+        'water_level': latest_data.waterLevel,
+        'steam': latest_data.steam,
+        # 'timestamp': latest_data.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+
+
+    # if hasattr(llm_response, "content"):
+    #     llm_text = llm_response.content.strip()
+    # else:
+    #     llm_text = str(llm_response).strip()
 
     # Basic fallback parser
-    action = parse_condition(question, sensor_data)
+    # 🔍 Step 1: Try rule-based parser first
+    action = parse_condition(user_input, sensor_data)
     if action in ("on", "off"):
         try:
             requests.get(f"{ESP32_IP}/motor/{action}")
-            return jsonify({'answer': f"Motor turned {action}. Reason: {response.strip()}"})
+            return jsonify({'answer': f"Motor turned {action}. Reason: condition"})
         except:
-            return jsonify({'answer': f"Failed to contact ESP32. Decision was to turn motor {action}."})
+            return jsonify({'answer': f"ESP32 unreachable. Motor should be {action}. Reason: condition "})
 
-    return jsonify({'answer': response.strip()})
+    # return jsonify({'answer': llm_text})
 
-@app.route('/api/motor/<state>')
-def motor_control(state):
+    # Build prompt for LLM
+    # 📚 Step 2: Use LLM if rule-based logic fails
+    context = (
+        f"Sensor readings:\n"
+        f"- Temperature: {sensor_data['temperature']} °C\n"
+        f"- Humidity: {sensor_data['humidity']} %\n"
+        f"- Light: {sensor_data['light']}\n"
+        f"- Soil Humidity: {sensor_data['soil_humidity']} %\n"
+        f"- Water Level: {sensor_data['water_level']} cm\n"
+        f"- Steam: {sensor_data['steam']} %\n"
+        # f"- Time: {sensor_data['timestamp']}\n\n"
+    )
+
+    prompt = context + (f"User command: {user_input}\n" 
+        #                "If the command includes a condition like 'temperature < 25', evaluate only that condition. "
+        # "If not, analyze all sensor values to decide. "
+        # "Respond strictly with 'on' or 'off' and a brief reason."
+                        "Analyze the command and current sensor readings. "
+                        "If the command includes a specific condition (like 'temperature < 25'), evaluate that condition. "
+                        "If the condition is met and the command says 'turn on', respond with 'on'. "
+                        "If the condition is met and the command says 'turn off', respond with 'off'. "
+                        "If the condition is not met, do the opposite action. "
+                        "If no specific condition is given, analyze all sensor values to decide. "
+                        "Respond strictly with 'on' or 'off' followed by a brief reason."
+                        )
+    # Generate LLM response
+    # llm_prompt = (
+    #     f"Sensor reading: {sensor_data}. Based on this, analyze the command: '{question}' "
+    #     "and respond whether motor should turn 'on' or 'off'."
+    # )
+    # llm_response = llm_openai.invoke(prompt)
+
     try:
-        r = requests.get(f"{ESP32_IP}/motor/{state}")
-        return jsonify({'status': f"Motor turned {state}"})
-    except:
-        return jsonify({'status': 'Failed to reach ESP32'}), 500
+        llm_response = llm_openai.invoke(prompt)
+        print("User input:", user_input)
+        print("LLM response type:", type(llm_response))
+        print("LLM response:", llm_response)
+
+        llm_text = getattr(llm_response, "content", str(llm_response)).strip()
+
+        # Extract action more reliably
+        action = None
+        if llm_text.lower().startswith('on'):
+            action = "on"
+        elif llm_text.lower().startswith('off'):
+            action = "off"
+        elif ' on ' in llm_text.lower() or llm_text.lower().endswith(' on'):
+            action = "on"
+        elif ' off ' in llm_text.lower() or llm_text.lower().endswith(' off'):
+            action = "off"
+
+        if action:
+            try:
+                requests.get(f"{ESP32_IP}/motor/{action}")
+                return jsonify({'answer': f"Motor turned {action}. LLM reason: {llm_text}"})
+            except:
+                return jsonify({'answer': f"ESP32 unreachable. LLM says motor should be {action}. Reason: {llm_text}"})
+
+        return jsonify({'answer': f"LLM was unsure: {llm_text}"})
+
+    except Exception as e:
+        print(f"LLM error: {e}")
+        return jsonify({'answer': f"LLM error: {str(e)}"})
+
+
+    # llm_response = llm_openai.invoke(prompt)
+    # print("User input :", user_input)
+    # print("LLM response type:", type(llm_response))
+    # print("LLM response:", llm_response)
+    # llm_text = getattr(llm_response, "content", str(llm_response)).strip()
+    #
+    # # print(f"Sensor data: {sensor_data}")
+    # # print(f"Parsed command result: action={action}, reason={llm_response}")
+    #
+    # # Optional: Extract "on" or "off" from LLM text for safety
+    # action = "on" if "on" in llm_text.lower() else "off" if "off" in llm_text.lower() else None
+    #
+    # if action:
+    #     try:
+    #         requests.get(f"{ESP32_IP}/motor/{action}")
+    #         return jsonify({'answer': f"Motor turned {action}. LLM reason: {llm_text}"})
+    #     except:
+    #         return jsonify({'answer': f"ESP32 unreachable. LLM says motor should be {action}. Reason: {llm_text}"})
+    #
+    # return jsonify({'answer': f"LLM was unsure: {llm_text}"})
+
+
+
+
+
+
+#  Function for condition evaluation and action execution
+
 
 
 def generate_text(prompt):
