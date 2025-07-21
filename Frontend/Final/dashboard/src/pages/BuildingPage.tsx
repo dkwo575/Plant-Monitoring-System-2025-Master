@@ -50,7 +50,7 @@ function BuildingPage() {
   }>();
 
   return (
-    <>
+    <div style={{ padding: '16px', overflow: 'scroll', width: '100%', height: '100vh' }}>
       <Row style={{ height: 'calc(50vh - 64px)' }}>
         <Col span={12} style={{ height: '100%', padding: '8px 16px' }}>
           <Row>
@@ -129,7 +129,7 @@ function BuildingPage() {
       <div>
         <ChatbotComponent />
       </div>
-    </>
+    </div>
   );
 }
 

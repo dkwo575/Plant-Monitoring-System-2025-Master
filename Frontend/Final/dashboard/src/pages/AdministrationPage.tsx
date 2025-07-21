@@ -317,14 +317,15 @@
 //   );
 // }
 
-// ------------------------- Version 2------------------
+// ------------------------- Version 2 - recent and will be used this------------------
 
 // src/pages/AdministrationPage.tsx
 import React, { useState } from 'react';
-import { Input, Button, Card, message } from 'antd';
+import { Input, Button, Card, message, Row, Col } from 'antd';
 import axios from 'axios';
 import { Navigate, useNavigate } from 'react-router-dom';
 import AddRuleForm from '../components/AddRuleFrom';
+import RuleTable from '../components/RuleTable';
 
 const AdministrationPage: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
@@ -351,37 +352,215 @@ const AdministrationPage: React.FC = () => {
     }
   };
 
+  const controlLight = async (state: 'on' | 'off') => {
+    try {
+      await axios.get(`http://localhost:5000/api/led/${state}`);
+      message.success(`Light turned ${state}`);
+      // Assuming you want to navigate to a light control page after successful action
+    } catch {
+      message.error('Failed to reach light control');
+    }
+  };
+
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 20, overflow: 'scroll', width: '100%', height: '100vh' }}>
       <Card title='LLM Command Input'>
         <Input.TextArea
           rows={3}
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
-          placeholder='e.g., Turn motor on if temperature < 30'
+          placeholder='Examples:
+          • Turn on motor if temperature > 30
+          • Turn off LED if humidity < 40  
+          • Turn on light when soil humidity < 50
+          • Turn off motor if water level > 80'
         />
-        <Button type='primary' onClick={submitChat} style={{ marginTop: 10 }}>
+        <Button type='primary' onClick={submitChat} style={{ marginTop: 15 }}>
           Send
         </Button>
         <p style={{ marginTop: 20 }}>{chatResponse}</p>
       </Card>
 
-      <Card title='Manual Motor Control' style={{ marginTop: 20 }}>
-        <Button onClick={() => controlMotor('on')} type='primary'>
-          Turn ON
-        </Button>
-        <Button onClick={() => controlMotor('off')} style={{ marginLeft: 10 }}>
-          Turn OFF
-        </Button>
+      <Card title='Manual Sensor Control' style={{ marginTop: 20 }}>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Card title='Motor Control'>
+              <Button onClick={() => controlMotor('on')} type='primary'>
+                Turn ON
+              </Button>
+              <Button onClick={() => controlMotor('off')} style={{ marginLeft: 15 }}>
+                Turn OFF
+              </Button>
+            </Card>
+          </Col>
+          <Col span={12}>
+            <Card title='Light Control'>
+              <Button onClick={() => controlLight('on')} type='primary'>
+                Turn ON
+              </Button>
+              <Button onClick={() => controlLight('off')} style={{ marginLeft: 10 }}>
+                Turn OFF
+              </Button>
+            </Card>
+          </Col>
+        </Row>
       </Card>
 
-      <Card title='Add Rule' style={{ marginTop: 20 }}>
-        <Button onClick={() => navigate('/add-rule')} type='primary'>
-          Add Rule
-        </Button>
+      <Card title='Add rules' style={{ marginTop: 20 }}>
+        <AddRuleForm />
+      </Card>
+
+      <Card title='Rule Tables' style={{ marginTop: 20 }}>
+        <RuleTable />
       </Card>
     </div>
   );
 };
 
 export default AdministrationPage;
+
+// ------------------------------ version 4 ------------- latest version
+
+// import React, { useState } from 'react';
+// import { Input, Button, Card, message } from 'antd';
+// import axios from 'axios';
+
+// const AdministrationPage: React.FC = () => {
+//   const [chatInput, setChatInput] = useState('');
+//   const [chatResponse, setChatResponse] = useState('');
+
+//   const submitChat = async () => {
+//     try {
+//       const res = await axios.post('http://localhost:5000/api/admin_chat_V2', {
+//         question: chatInput,
+//       });
+//       setChatResponse(res.data.answer);
+//     } catch (err) {
+//       message.error('Failed to contact backend');
+//     }
+//   };
+
+//   const controlMotor = async (state: 'on' | 'off') => {
+//     try {
+//       await axios.get(`http://localhost:5000/api/motor/${state}`);
+//       message.success(`Motor turned ${state}`);
+//     } catch {
+//       message.error('Failed to reach ESP32');
+//     }
+//   };
+
+//   return (
+//     <div style={{ padding: 20 }}>
+//       <Card title='LLM Command Input'>
+//         <Input.TextArea
+//           rows={3}
+//           value={chatInput}
+//           onChange={(e) => setChatInput(e.target.value)}
+//           placeholder='e.g., Turn motor on if temperature < 30'
+//         />
+//         <Button type='primary' onClick={submitChat} style={{ marginTop: 10 }}>
+//           Send
+//         </Button>
+//         <p style={{ marginTop: 20 }}>{chatResponse}</p>
+//       </Card>
+
+//       <Card title='Manual Motor Control' style={{ marginTop: 20 }}>
+//         <Button onClick={() => controlMotor('on')} type='primary'>
+//           Turn ON
+//         </Button>
+//         <Button onClick={() => controlMotor('off')} style={{ marginLeft: 10 }}>
+//           Turn OFF
+//         </Button>
+//       </Card>
+//     </div>
+//   );
+// };
+
+// export default AdministrationPage;
+
+// ------------------------- Version 3------------------
+
+// src/pages/AdministrationPage.tsx
+
+// import React, { useState } from 'react';
+// import { Button, Input, Card, Typography, message } from 'antd';
+// import axios from 'axios';
+
+// const { Title } = Typography;
+
+// const AdministrationPage: React.FC = () => {
+//   const [isAuthenticated, setIsAuthenticated] = useState(false);
+//   const [id, setId] = useState('');
+//   const [password, setPassword] = useState('');
+//   const [command, setCommand] = useState('');
+
+//   const handleLogin = () => {
+//     if (id === 'admin' && password === '1234') {
+//       setIsAuthenticated(true);
+//     } else {
+//       message.error('Invalid credentials');
+//     }
+//   };
+
+//   const sendCommand = async () => {
+//     const res = await axios.post('http://YOUR_FLASK_SERVER_IP:5000/api/admin_chat', {
+//       question: command,
+//     });
+//     message.success(res.data.answer);
+//   };
+
+//   const manualControl = async (action: 'on' | 'off') => {
+//     await axios.post(`http://YOUR_FLASK_SERVER_IP:5000/api/motor/${action}`);
+//     message.success(`Motor turned ${action}`);
+//   };
+
+//   if (!isAuthenticated) {
+//     return (
+//       <Card style={{ maxWidth: 400, margin: '50px auto' }}>
+//         <Title level={4}>Admin Login</Title>
+//         <Input
+//           placeholder='ID'
+//           value={id}
+//           onChange={(e) => setId(e.target.value)}
+//           style={{ marginBottom: 10 }}
+//         />
+//         <Input.Password
+//           placeholder='Password'
+//           value={password}
+//           onChange={(e) => setPassword(e.target.value)}
+//           style={{ marginBottom: 10 }}
+//         />
+//         <Button type='primary' onClick={handleLogin}>
+//           Login
+//         </Button>
+//       </Card>
+//     );
+//   }
+
+//   return (
+//     <Card style={{ maxWidth: 600, margin: '50px auto' }}>
+//       <Title level={4}>Administration Panel</Title>
+
+//       <div style={{ marginBottom: 20 }}>
+//         <Input.TextArea
+//           rows={3}
+//           placeholder='Give natural language command'
+//           value={command}
+//           onChange={(e) => setCommand(e.target.value)}
+//         />
+//         <Button type='primary' onClick={sendCommand} style={{ marginTop: 10 }}>
+//           Submit Command
+//         </Button>
+//       </div>
+
+//       <div>
+//         <Button onClick={() => manualControl('on')} style={{ marginRight: 10 }}>
+//           Turn Motor On
+//         </Button>
+//         <Button onClick={() => manualControl('off')}>Turn Motor Off</Button>
+//       </div>
+//     </Card>
+//   );
+// };
+
+// export default AdministrationPage;
