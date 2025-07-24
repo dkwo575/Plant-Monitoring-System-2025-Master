@@ -1,4 +1,9 @@
 # Logs
+
+# Ignore environment files
+.env
+.env.*  # Optional: ignore other env files like .env.local, .env.production
+
 logs
 *.log
 npm-debug.log*
@@ -14,6 +19,11 @@ dist-ssr
 
 *.png
 *.npy
+
+# Build outputs
+dist/
+build/
+
 
 # Editor directories and files
 .vscode/*

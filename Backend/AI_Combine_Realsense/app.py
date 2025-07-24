@@ -64,6 +64,16 @@ from langchain.chains import RetrievalQA
 # from langchain_community.llms import llamacpp
 # from langchain_core.prompts import chat
 
+# library for generate report
+from docx import Document
+from docx.shared import Inches
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from io import BytesIO
+from matplotlib import pyplot as plt
+import pandas as pd
+
 
 
 # Initialize Flask app and extensions
@@ -84,8 +94,7 @@ mysql_uri = f"mysql+pymysql://DoJunKwon:/sensor_DB"
 
 
 # # Initialize Langchain
-os.environ['HUGGINGFACEHUB_API_TOKEN'] = 'pw'
-huggingfaceAPI = 'pw'
+huggingfaceAPI = os.getenv('HUGGINGFACEHUB_API_TOKEN')
 repo_id = 'mistralai/Mistral-7B-Instruct-v0.3'
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -94,7 +103,7 @@ llm = HuggingFaceEndpoint(
     repo_id=repo_id,
     temperature = 0.5,
     model_kwargs={"max_length": 128},
-    huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
+    huggingfacehub_api_token=huggingfaceAPI,
 )
 
 db_langchain = SQLDatabase.from_uri(mysql_uri, include_tables=['lab_iot_2025'], sample_rows_in_table_info=2)
@@ -317,7 +326,7 @@ prompt = PromptTemplate.from_template(template2)
 
 # Step 5: Set up RetrievalQA
 retriever_sql = vectorstore_sql.as_retriever()
-llm_openai = ChatOpenAI(model_name ="gpt-3.5-turbo", temperature=0)
+llm_openai = ChatOpenAI(model_name ="gpt-4o-mini", temperature=0)
 qa_chain = RetrievalQA.from_chain_type(
     llm=llm_openai,
     retriever=retriever_sql,
@@ -552,8 +561,16 @@ def parse_condition(command, sensor_data):
         ('steam', r'steam\s*(<=|>=|<|>)\s*(\d+)'),
     ]
 
+    # Determine device type from command
+    device_type = "motor"  # default
+    command_lower = command.lower()
+    if any(word in command.lower() for word in ['led', 'light', 'lamp', 'bulb']):
+        device_type = "led"
+    elif any(word in command.lower() for word in ['motor', 'pump', 'fan']):
+        device_type = "motor"
+
     for key, pattern in condition_patterns:
-        match = re.search(pattern, command, re.I)
+        match = re.search(pattern, command, re.IGNORECASE)
         if match:
             operator = match.group(1)
             threshold = int(match.group(2))
@@ -584,26 +601,62 @@ def parse_condition(command, sensor_data):
                 condition_met = True
             elif operator == '>=' and current_value >= threshold:
                 condition_met = True
+            elif operator == '=' and current_value == threshold:
+                condition_met = True
 
-            # Determine action based on command intent and condition
-            if condition_met:
-                if any(word in command.lower() for word in ['turn on', 'start', 'activate', 'enable']):
-                    return "on", f"{key} ({current_value}) meets condition ({operator} {threshold})"
-                elif any(word in command.lower() for word in ['turn off', 'stop', 'deactivate', 'disable']):
-                    return "off", f"{key} ({current_value}) meets condition ({operator} {threshold})"
-                else:
-                    # Default to 'on' if condition is met but no clear action specified
-                    return "on", f"{key} ({current_value}) meets condition ({operator} {threshold})"
-            else:
-                # Condition not met, return opposite action or no action
-                if any(word in command.lower() for word in ['turn on', 'start', 'activate', 'enable']):
-                    return "off", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
-                elif any(word in command.lower() for word in ['turn off', 'stop', 'deactivate', 'disable']):
-                    return "on", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
-                else:
-                    return "off", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+                # # Determine action based on command intent and condition
+                # if condition_met:
+                #     if any(word in command.lower() for word in ['turn on', 'start', 'activate', 'enable']):
+                #         return device_type, "on", f"{key} ({current_value}) meets condition ({operator} {threshold})"
+                #     elif any(word in command.lower() for word in ['turn off', 'stop', 'deactivate', 'disable']):
+                #         return device_type, "off", f"{key} ({current_value}) meets condition ({operator} {threshold})"
+                #     else:
+                #         # Default to 'on' if condition is met but no clear action specified
+                #         return device_type, "on", f"{key} ({current_value}) meets condition ({operator} {threshold})"
+                # else:
+                #     # Condition not met, return opposite action
+                #     if any(word in command.lower() for word in ['turn on', 'start', 'activate', 'enable']):
+                #         return device_type, "off", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+                #     elif any(word in command.lower() for word in ['turn off', 'stop', 'deactivate', 'disable']):
+                #         return device_type, "on", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+                #     else:
+                #         return device_type, "off", f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+                # Determine the intended action from the command
+                intended_action = "on"  # default
+                if any(phrase in command_lower for phrase in ['turn on', 'start', 'activate', 'enable']):
+                    intended_action = "on"
+                elif any(phrase in command_lower for phrase in ['turn off', 'stop', 'deactivate', 'disable']):
+                    intended_action = "off"
 
-            return None, None  # No matching condition
+                # Execute the intended action only if condition is met
+                if condition_met:
+                    return device_type, intended_action, f"{key} ({current_value}) meets condition ({operator} {threshold})"
+                else:
+                    # Condition not met, do the opposite
+                    opposite_action = "off" if intended_action == "on" else "on"
+                    return device_type, opposite_action, f"{key} ({current_value}) does not meet condition ({operator} {threshold})"
+
+            return None, None, None  # No matching condition
+
+
+def send_device_command(device_type, action, esp32_ip):
+    """Send command to appropriate device endpoint"""
+    try:
+        endpoint = f"{esp32_ip}/{device_type}/{action}"
+        print(f"Sending command to: {endpoint}")
+        response = requests.get(endpoint, timeout=10)
+
+        if response.status_code == 200:
+            return True, f"{device_type.upper()} turned {action}"
+        else:
+            return False, f"ESP32 returned status {response.status_code}"
+
+    except requests.exceptions.ConnectionError:
+        return False, f"ESP32 unreachable at {esp32_ip}"
+    except requests.exceptions.Timeout:
+        return False, f"ESP32 connection timed out"
+    except Exception as e:
+        return False, f"Error: {str(e)}"
 
 
 @app.route('/api/admin_chat', methods=['POST'])
@@ -640,14 +693,25 @@ def admin_chat():
     #     llm_text = str(llm_response).strip()
 
     # Basic fallback parser
-    # 🔍 Step 1: Try rule-based parser first
-    action = parse_condition(user_input, sensor_data)
-    if action in ("on", "off"):
-        try:
-            requests.get(f"{ESP32_IP}/motor/{action}")
-            return jsonify({'answer': f"Motor turned {action}. Reason: condition"})
-        except:
-            return jsonify({'answer': f"ESP32 unreachable. Motor should be {action}. Reason: condition "})
+    # # 🔍 Step 1: Try rule-based parser first
+    # action = parse_condition(user_input, sensor_data)
+    # if action in ("on", "off"):
+    #     try:
+    #         requests.get(f"{ESP32_IP}/motor/{action}")
+    #         return jsonify({'answer': f"Motor turned {action}. Reason: condition"})
+    #     except:
+    #         return jsonify({'answer': f"ESP32 unreachable. Motor should be {action}. Reason: condition "})
+
+    # Step 1: Try rule-based parser first
+    result = parse_condition(user_input, sensor_data)
+    if result and len(result) == 3:  # device_type, action, reason
+        device_type, action, reason = result
+        if device_type and action in ("on", "off"):
+            success, message = send_device_command(device_type, action, ESP32_IP)
+            if success:
+                return jsonify({'answer': f"{message}. Reason: {reason}"})
+            else:
+                return jsonify({'answer': f"{message}. {device_type.upper()} should be {action}. Reason: {reason}"})
 
     # return jsonify({'answer': llm_text})
 
@@ -668,13 +732,25 @@ def admin_chat():
         #                "If the command includes a condition like 'temperature < 25', evaluate only that condition. "
         # "If not, analyze all sensor values to decide. "
         # "Respond strictly with 'on' or 'off' and a brief reason."
-                        "Analyze the command and current sensor readings. "
-                        "If the command includes a specific condition (like 'temperature < 25'), evaluate that condition. "
-                        "If the condition is met and the command says 'turn on', respond with 'on'. "
-                        "If the condition is met and the command says 'turn off', respond with 'off'. "
-                        "If the condition is not met, do the opposite action. "
-                        "If no specific condition is given, analyze all sensor values to decide. "
-                        "Respond strictly with 'on' or 'off' followed by a brief reason."
+                        "IMPORTANT: Interpret commands literally, not based on logical assumptions.\n"
+        "If user says 'turn on X if condition Y', turn on X ONLY when condition Y is TRUE.\n"
+        "If user says 'turn off X if condition Y', turn off X ONLY when condition Y is TRUE.\n"
+        "Examples:\n"
+        "- 'turn on led if temperature > 20' with temp=25 → turn LED ON (condition is true)\n"
+        "- 'turn on led if temperature > 20' with temp=15 → turn LED OFF (condition is false)\n"
+        "- 'turn off led if temperature > 20' with temp=25 → turn LED OFF (condition is true)\n"
+        "- 'turn off led if temperature > 20' with temp=15 → turn LED ON (condition is false)\n\n"
+        "Device identification:\n"
+        "- If command mentions 'LED', 'light', 'lamp', or 'bulb', control the LED\n"
+        "- If command mentions 'motor', 'pump', or 'fan', control the motor\n"
+        "- If no device specified, default to motor\n\n"
+        "For conditional commands (with 'if'):\n"
+        "1. Check if the condition is true or false\n"
+        "2. If condition is TRUE, execute the requested action (on/off)\n"
+        "3. If condition is FALSE, do the opposite action\n\n"
+        "For non-conditional commands, analyze sensor values to decide the best action.\n\n"
+        "Respond EXACTLY in this format: 'DEVICE:ACTION:REASON'\n"
+        "Where DEVICE is 'motor' or 'led', ACTION is 'on' or 'off', and REASON explains your decision."
                         )
     # Generate LLM response
     # llm_prompt = (
@@ -691,23 +767,39 @@ def admin_chat():
 
         llm_text = getattr(llm_response, "content", str(llm_response)).strip()
 
-        # Extract action more reliably
+        # Parse LLM response in format "DEVICE:ACTION:REASON"
+        if ':' in llm_text:
+            parts = llm_text.split(':', 2)
+            if len(parts) >= 2:
+                device_type = parts[0].lower().strip()
+                action = parts[1].lower().strip()
+                reason = parts[2] if len(parts) > 2 else "LLM decision"
+
+                if device_type in ['motor', 'led'] and action in ['on', 'off']:
+                    success, message = send_device_command(device_type, action, ESP32_IP)
+                    if success:
+                        return jsonify({'answer': f"{message}. Reason: {reason}"})
+                    else:
+                        return jsonify(
+                            {'answer': f"{message}. {device_type.upper()} should be {action}. Reason: {reason}"})
+
+        # Fallback parsing if format is not followed
+        device_type = "motor"  # default
+        if any(word in llm_text.lower() for word in ['led', 'light', 'lamp', 'bulb']):
+            device_type = "led"
+
         action = None
-        if llm_text.lower().startswith('on'):
+        if llm_text.lower().startswith('on') or ' on ' in llm_text.lower():
             action = "on"
-        elif llm_text.lower().startswith('off'):
-            action = "off"
-        elif ' on ' in llm_text.lower() or llm_text.lower().endswith(' on'):
-            action = "on"
-        elif ' off ' in llm_text.lower() or llm_text.lower().endswith(' off'):
+        elif llm_text.lower().startswith('off') or ' off ' in llm_text.lower():
             action = "off"
 
         if action:
-            try:
-                requests.get(f"{ESP32_IP}/motor/{action}")
-                return jsonify({'answer': f"Motor turned {action}. LLM reason: {llm_text}"})
-            except:
-                return jsonify({'answer': f"ESP32 unreachable. LLM says motor should be {action}. Reason: {llm_text}"})
+            success, message = send_device_command(device_type, action, ESP32_IP)
+            if success:
+                return jsonify({'answer': f"{message}. LLM reason: {llm_text}"})
+            else:
+                return jsonify({'answer': f"{message}. {device_type.upper()} should be {action}. Reason: {llm_text}"})
 
         return jsonify({'answer': f"LLM was unsure: {llm_text}"})
 
@@ -715,6 +807,173 @@ def admin_chat():
         print(f"LLM error: {e}")
         return jsonify({'answer': f"LLM error: {str(e)}"})
 
+# ----------------------- Report generation ------------------------------
+
+def create_graph(df, column_name, file_path):
+    plt.figure(figsize=(10, 5))
+    plt.plot(df['timestamp'], df[column_name], marker='o', linestyle='-', color='b')
+    plt.title(f'{column_name.capitalize()} Over Time')
+    plt.xlabel('Timestamp')
+    plt.ylabel(column_name.capitalize())
+    plt.xticks(rotation=45)
+    plt.grid(True)
+    plt.savefig(file_path)
+    plt.close()
+
+def generate_llm_summary(df):
+    summary_prompt_V2 = f"""
+    
+    Analyze the following sensor data and provide a summary of the plant's health and environment.
+    The data covers the period from {df['timestamp'].min()} to {df['timestamp'].max()}.
+    
+    Key statistics:
+    - Temperature:
+        - Average: {df['temperature'].mean():.2f} °C
+        - Min: {df['temperature'].min()} °C
+        - Max: {df['temperature'].max()} °C
+        
+    - Humidity:
+        - Average: {df['humidity'].mean():.2f} %
+        - Min: {df['humidity'].min()} %
+        - Max: {df['humidity'].max()} %
+         
+    - Light:
+        - Average: {df['light'].mean():.2f}
+        - Min: {df['light'].min()}
+        - Max: {df['light'].max()} 
+    
+    - Soil Humidity:
+        - Average: {df['soilHumidity'].mean():.2f} %
+        - Min: {df['soilHumidity'].min()} %
+        - Max: {df['soilHumidity'].max()} %    
+    
+    - Water Level:
+        - Average: {df['waterLevel'].mean():.2f} cm
+        - Min: {df['waterLevel'].min()} cm
+        - Max: {df['waterLevel'].max()} cm
+           
+    - Steam:
+        - Average: {df['steam'].mean():.2f} %
+        - Min: {df['steam'].min()} %
+        - Max: {df['steam'].max()} %
+        
+    Based on this data, please provide a brief analysis and any recommendations for improving the plant's environment.
+        
+    """
+    summary_response = llm_openai.invoke(summary_prompt_V2)
+    return summary_response.content
+
+
+def create_pdf_report(summary, graph_paths):
+
+    bio = BytesIO()
+    doc = SimpleDocTemplate(bio, pagesize=A4)
+    style = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Farm Environmental Report", style['Title']))
+    story.append(Spacer(1, 12))
+
+    # Replace newlines with HTML line breaks for proper rendering in the PDF
+    summary_with_breaks = summary.replace('\n', '<br/>')
+    story.append(Paragraph(summary_with_breaks, style['BodyText']))
+    story.append(Spacer(1, 24))
+
+    for graph_path in graph_paths:
+        # Extract the metric name from the file path to use as a subtitle
+        metric_name = os.path.basename(graph_path).split('_')[0].capitalize()
+        
+        # Add a subtitle for each graph
+        story.append(Paragraph(f"{metric_name} Over Time", style['h2']))
+        story.append(Spacer(1, 6))
+
+        img = Image(graph_path, width=400, height=300)
+        story.append(img)
+        story.append(Spacer(1, 24))
+
+    doc.build(story)
+    bio.seek(0)
+    return bio
+
+
+@app.route('/api/report', methods=['GET'])
+def generate_report():
+    period = request.args.get('period', 'weekly')  # Default to daily report
+    report_format = request.args.get('format', 'pdf')  # Default to PDF format
+
+    end_date = datetime.datetime.now(nz)
+
+    if period == 'weekly':
+        start_date = end_date - datetime.timedelta(days=7)
+    elif period == 'monthly':
+        start_date = end_date - datetime.timedelta(days=30)
+    else:  # Default to daily report
+        return jsonify({"error": "Invalid period specified. Use 'daily', 'weekly', or 'monthly'."}), 400
+
+    # Fetch data from the database
+    query = db.session.query(Environments).filter(Environments.timestamp.between(start_date, end_date))
+    df = pd.read_sql(query.statement, db.engine)
+
+    if df.empty:
+        return jsonify({"error": "No data available for the specified period."}), 404
+
+    # Generate graphs
+    graph_paths = []
+    for col in ['temperature', 'humidity', 'light', 'soilHumidity', 'waterLevel', 'steam']:
+        graph_path = f"static/graphs/{col}_{start_date.strftime('%Y%m%d')}_to_{end_date.strftime('%Y%m%d')}.png"
+        create_graph(df, col, graph_path)
+        graph_paths.append(graph_path)
+
+    # Generate LLM summary
+    summary = generate_llm_summary(df)
+
+    current_date = datetime.datetime.now(nz).strftime("%Y-%m-%d %H:%M:%S")
+
+    # convert datetime obj to string
+    str_current_datetime = str(current_date)
+
+    # Create report
+    if report_format == 'pdf':
+        report_bio = create_pdf_report(summary, graph_paths)
+        mimetype = 'application/pdf'
+        filename = (str_current_datetime + "_report.pdf").replace(" ", "_").replace(":", "-")  # Replace spaces and colons for filename
+
+    else:
+        return jsonify({"error": "Invalid format specified. Use 'pdf'."}), 400
+
+    # clean up temporary graph files
+    # for path in graph_paths:
+    #     os.remove(path)
+
+    return send_file(report_bio, mimetype = mimetype, as_attachment= True, download_name=filename)
+
+
+# ------------------------------------------------------
+#         # Extract action more reliably
+#         action = None
+#         if llm_text.lower().startswith('on'):
+#             action = "on"
+#         elif llm_text.lower().startswith('off'):
+#             action = "off"
+#         elif ' on ' in llm_text.lower() or llm_text.lower().endswith(' on'):
+#             action = "on"
+#         elif ' off ' in llm_text.lower() or llm_text.lower().endswith(' off'):
+#             action = "off"
+#
+#         if action:
+#             try:
+#                 requests.get(f"{ESP32_IP}/motor/{action}")
+#                 return jsonify({'answer': f"Motor turned {action}. LLM reason: {llm_text}"})
+#             except:
+#                 return jsonify({'answer': f"ESP32 unreachable. LLM says motor should be {action}. Reason: {llm_text}"})
+#
+#         return jsonify({'answer': f"LLM was unsure: {llm_text}"})
+#
+#     except Exception as e:
+#         print(f"LLM error: {e}")
+#         return jsonify({'answer': f"LLM error: {str(e)}"})
+
+# ----------------------------
 
     # llm_response = llm_openai.invoke(prompt)
     # print("User input :", user_input)
@@ -754,14 +1013,6 @@ def generate_text(prompt):
     response = chain.run(prompt)
     return response
 
-def text_to_speech(text):
-
-    """
-    Convert text to speech using TTS.
-    gTTS를 사용하여 텍스트를 음성으로 변환
-    """
-    # Implement your TTS logic here
-    pass
 
 @app.route('/query', methods=['POST'])
 def query_db():
