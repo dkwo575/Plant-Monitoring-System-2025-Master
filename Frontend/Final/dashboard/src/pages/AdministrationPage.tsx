@@ -321,16 +321,23 @@
 
 // src/pages/AdministrationPage.tsx
 import React, { useState } from 'react';
-import { Input, Button, Card, message, Row, Col } from 'antd';
+import { Input, Button, Card, message, Row, Col, Spin, Select } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { Navigate, useNavigate } from 'react-router-dom';
 import AddRuleForm from '../components/AddRuleFrom';
 import RuleTable from '../components/RuleTable';
 
+const { Option } = Select;
+
 const AdministrationPage: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [chatResponse, setChatResponse] = useState('');
   const navigate = useNavigate();
+
+  const [reportPeriod, setReportPeriod] = useState('weekly');
+  const [reportFormat, setReportFormat] = useState('pdf');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const submitChat = async () => {
     try {
@@ -359,6 +366,54 @@ const AdministrationPage: React.FC = () => {
       // Assuming you want to navigate to a light control page after successful action
     } catch {
       message.error('Failed to reach light control');
+    }
+  };
+
+  const generateReport = async () => {
+    setIsGeneratingReport(true);
+    try {
+      const response = await axios.get('http://localhost:5000/api/report', {
+        params: {
+          period: reportPeriod,
+          format: reportFormat,
+        },
+        responseType: 'blob', // Important for file downloads
+      });
+
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Get filename from response headers or create a default one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `farm_report_${reportPeriod}.pdf`;
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      message.success('Report generated and downloaded successfully!');
+    } catch (error) {
+      console.error('Error generating report:', error);
+      if (error.response?.status === 404) {
+        message.error('No data available for the specified period');
+      } else if (error.response?.status === 400) {
+        message.error('Invalid parameters specified');
+      } else {
+        message.error('Failed to generate report');
+      }
+    } finally {
+      setIsGeneratingReport(false);
     }
   };
 
@@ -404,6 +459,56 @@ const AdministrationPage: React.FC = () => {
             </Card>
           </Col>
         </Row>
+      </Card>
+
+      <Card title='Generate Environmental Report' style={{ marginTop: 20 }}>
+        <Row gutter={16} align='middle'>
+          <Col span={8}>
+            <div style={{ marginBottom: 8 }}>
+              <strong>Report Period:</strong>
+            </div>
+            <Select value={reportPeriod} onChange={setReportPeriod} style={{ width: '100%' }}>
+              <Option value='weekly'>Weekly</Option>
+              <Option value='monthly'>Monthly</Option>
+            </Select>
+          </Col>
+          <Col span={8}>
+            <div style={{ marginBottom: 8 }}>
+              <strong>Report Format:</strong>
+            </div>
+            <Select value={reportFormat} onChange={setReportFormat} style={{ width: '100%' }}>
+              <Option value='pdf'>PDF</Option>
+            </Select>
+          </Col>
+          <Col span={8}>
+            <div style={{ marginBottom: 8 }}>
+              <strong>Action:</strong>
+            </div>
+            <Button
+              type='primary'
+              onClick={generateReport}
+              disabled={isGeneratingReport}
+              icon={<DownloadOutlined />}
+              style={{ width: '100%' }}
+            >
+              {isGeneratingReport ? <Spin size='small' /> : 'Generate & Download Report'}
+            </Button>
+          </Col>
+        </Row>
+        <div style={{ marginTop: 16, color: '#666', fontSize: '14px' }}>
+          <p>
+            <strong>Report includes:</strong>
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            <li>
+              Environmental data analysis (temperature, humidity, light, soil humidity, water level,
+              steam)
+            </li>
+            <li>Statistical summaries and trends</li>
+            <li>Graphical visualizations</li>
+            <li>AI-generated insights and recommendations</li>
+          </ul>
+        </div>
       </Card>
 
       <Card title='Add rules' style={{ marginTop: 20 }}>
