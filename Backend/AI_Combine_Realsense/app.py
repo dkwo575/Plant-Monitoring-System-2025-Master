@@ -43,11 +43,13 @@ from langchain.text_splitter import CharacterTextSplitter
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_mistralai import ChatMistralAI
+import openai
 
 from langchain.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from langchain.chains import RetrievalQA
+from langchain.callbacks import get_openai_callback
 #
 # from langchain_core.prompts import PromptTemplate
 # from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -76,9 +78,10 @@ import pandas as pd
 
 
 
+
 # Initialize Flask app and extensions
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}}, expose_headers = ["Content-Disposition"])
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 load_dotenv()
