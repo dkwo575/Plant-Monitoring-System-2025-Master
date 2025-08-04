@@ -1,7 +1,7 @@
 # Plant-Monitoring-System-2025-Master
 
 ## Introduction
-This project is Part 4 Project #61 from done my Do Jun Kwon and Kim Zuo.
+This project is Master Project for Plant Monitoring System
 This repository contains code and document for Integrated Plant Monitoring System for estimate tomato harvest time.
 
 ## Prerequisites
@@ -10,8 +10,8 @@ This repository contains code and document for Integrated Plant Monitoring Syste
 - Anaconda or Miniconda
 - Pytorch
 - MMDetection (mmcv-full = 1.6.0 and mmdet = 3.1.0)
-- XAMPP
 - Arduino
+- Visual Studio Code
 
 ### Frontend
 Frontend application directory run the following command
@@ -30,12 +30,6 @@ then use the following command to run the project
 4. Use pip to install packages include Flask, SocketIO, pyrealsense2(Any Version is available), MMDetection (mmcv-full = 1.6.0 and mmdet = 3.1.0)
 
 
-### IoT Sensor system
-1. Install Arduino to control MCU with sensors
-2. Install XAMPP that can run Apache server and MySQL server to transfer data from MCU to MySQL Database
-3. Use the Arduino file names as final.ino
-4. Use PhP file to communicate between Apache Web Server and MySQL server.
-
 ### Server setup
 1. Install Nginx for Frontend and Gunicorn for Backend.
 2. Follow the instructions on how to use Nginx and Gunicorn.
@@ -47,13 +41,13 @@ then use the following command to run the project
 - React
 - Vite
 - Arduino
-- PhP
-- XAMPP
 - Nginx
 - Gunicorn
 - Flask
 - PyTroch
 - MMDetection
+- HuggingFace
+- LangChain
 
 
 
