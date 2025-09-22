@@ -85,15 +85,18 @@ CORS(app, resources={r"/*": {"origins": "*"}}, expose_headers = ["Content-Dispos
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 load_dotenv()
-
+# 关键：让 OpenAIEmbeddings 能找到 API KEY
+# if os.getenv('OPENROUTE_API_KEY'):
+#     os.environ['OPENAI_API_KEY'] = os.getenv('OPENROUTE_API_KEY')
 openaikey = os.getenv('OPENAI_API_KEY')
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://DoJunKwon:/sensor_DB'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
-mysql_uri = f"mysql+pymysql://DoJunKwon:/sensor_DB"
+mysql_uri = app.config['SQLALCHEMY_DATABASE_URI']
+# Example: mysql_uri = "mysql+pymysql://YuiWang:yourpassword@localhost:3306/sensor_DB"
 
 
 # # Initialize Langchain
@@ -292,7 +295,11 @@ db_sql = SQLDatabase.from_uri(mysql_uri)
 #
 # # 2. HuggingfaceLLM
 # # use LLM what we made
-llm_openai = ChatOpenAI(model_name ="gpt-3.5-turbo", temperature=0)
+# llm_openai = ChatOpenAI(model_name ="gpt-3.5-turbo", temperature=0)
+# 需要更改，上面的这个
+openRouterAPI = os.getenv('OPENROUTER_API_KEY')
+llm_openai = ChatOpenAI(model = "deepseek/deepseek-chat-v3.1:free", openai_api_key = openRouterAPI, base_url = "https://openrouter.ai/api/v1")
+
 dbsql_chain = SQLDatabaseChain.from_llm(llm_openai, db_sql, verbose=True, return_intermediate_steps=False)
 
 # 1.db
@@ -308,8 +315,8 @@ split_doc = text_splitter.split_documents(documents)
 print(f"chunk : {len(split_doc)}")
 
 # Step 4: Embed documents
-# embeddings_sql = HuggingFaceEmbeddings(model_name= "sentence-transformers/all-MiniLM-L12-v2")
-embeddings_sql = OpenAIEmbeddings()
+embeddings_sql = HuggingFaceEmbeddings(model_name= "sentence-transformers/all-MiniLM-L12-v2")
+# embeddings_sql = OpenAIEmbeddings()
 vectorstore_sql = FAISS.from_documents(split_doc, embeddings_sql)
 
 template2 =   """You are a smart assistant that answers questions based on lab data retrieved from a MySQL database.
