@@ -15,36 +15,36 @@
 // export default MessageParser;
 
 // ----------------- 2nd version -----------------
-import axios from 'axios';
+// import axios from 'axios';
 
-class MessageParser {
-  actionProvider: any;
+// class MessageParser {
+//   actionProvider: any;
 
-  constructor(actionProvider: any) {
-    this.actionProvider = actionProvider;
-  }
+//   constructor(actionProvider: any) {
+//     this.actionProvider = actionProvider;
+//   }
 
-  async parse(message: string) {
-    try {
-      const res = await axios.post('http://localhost:5000/api/chat_simple', {
-        question: message,
-      });
-      console.log('MessageParser:', message);
+//   async parse(message: string) {
+//     try {
+//       const res = await axios.post('http://localhost:5000/api/chat_simple', {
+//         question: message,
+//       });
+//       console.log('MessageParser:', message);
 
-      const answer = res.data.answer;
-      this.actionProvider.handleResponse(answer);
-    } catch (error) {
-      console.error('Error fetching answer:', error);
-      this.actionProvider.handleResponse('Sorry, something went wrong.');
-    }
+    //   const answer = res.data.answer;
+    //   this.actionProvider.handleResponse(answer);
+    // } catch (error) {
+    //   console.error('Error fetching answer:', error);
+    //   this.actionProvider.handleResponse('Sorry, something went wrong.');
+    // }
 
     // try {
     //   const respon = await axios.post('http://')
     // }
-  }
-}
+//   }
+// }
 
-export default MessageParser;
+// export default MessageParser;
 
 // ----------------- 3rd version -----------------
 // import { MessageParser } from 'react-chatbot-kit';
@@ -75,3 +75,22 @@ export default MessageParser;
 // }
 
 // export default MessageParser;
+
+// 4th version
+// src/chatbot/MessageParser.ts
+import type { MessageParser as IMessageParser } from "react-chatbot-kit";
+
+class MessageParser implements IMessageParser {
+  actionProvider: any;
+  constructor(actionProvider: any) {
+    this.actionProvider = actionProvider;
+  }
+  parse(message: string) {
+    const text = (message || "").toString().trim();
+    if (!text) return;
+    this.actionProvider.handleUserMessage(text);
+  }
+}
+
+export default MessageParser;
+

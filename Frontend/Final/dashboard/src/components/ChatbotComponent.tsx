@@ -1,27 +1,21 @@
+// src/chatbot/ChatbotComponent.tsx
 import React, { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
-import { Chatbot, createChatBotMessage } from 'react-chatbot-kit';
+import { Chatbot, createChatBotMessage, createClientMessage } from 'react-chatbot-kit';
 import 'react-chatbot-kit/build/main.css';
-import { Card, Col, Row, Typography, Switch } from 'antd';
-import { MaterialSymbol } from 'react-material-symbols';
-import theme from '../theme';
+import { Switch } from 'antd';
 
 import config from '../chatbot/configchatbot';
 import MessageParser from '../chatbot/MessageParser';
 import ActionProvider from '../chatbot/ActionProvider';
 import '../chatbot/ChatbotComponent.css';
-import { set } from 'lodash-es';
-import { act } from 'react-dom/test-utils';
 
-// Create custom config with voice settings
+// === 根据语音开关构造 config（保留你原有写法） ===
 const createCustomConfig = (voiceEnabled: boolean) => {
   return {
     ...config,
-    // Pass voiceEnabled to the ActionProvider
     customComponents: {
       ...config.customComponents,
     },
-    // Add voiceEnabled to the initialState
     initialState: {
       ...config.state,
       voiceEnabled,
@@ -31,283 +25,211 @@ const createCustomConfig = (voiceEnabled: boolean) => {
 
 const ChatbotComponent: React.FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true); // voice toggle
-  const [customConfig, setCustomConfig] = useState<any>(createCustomConfig(true)); // custom config
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(false);
+  const [customConfig, setCustomConfig] = useState<any>(createCustomConfig(voiceEnabled));
 
-  const [isListening, setIsListening] = useState<boolean>(false); // listening state
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [sttText, setSttText] = useState('');
+  // const [autoSend, setAutoSend] = useState(false);
 
-  const [chatbotState, setChatbotState] = useState<any>(null); // chatbot state
-  const [chatbotActionProvider, setChatbotActionProvider] = useState<any>(null); // chatbot action provider
+  const recognitionRef = useRef<any>(null);
+  const chatbotActionProviderRef = useRef<any>(null); // 用来保存真正的 ActionProvider 实例
 
-  const recognitionRef = useRef<any>(null); // reference to the SpeechRecognition instance
-  const chatbotstateRef = useRef<any>(null); // reference to the chatbot state
-  const chatbotActionProviderRef = useRef<any>(null); // reference to the chatbot action provider
-
-  // ------------------------ new function 27/05/25 -------
-  // Add TTS function
-  const speakText = (text: string) => {
-    console.log('speakText called with:', text);
-    console.log('voiceEnabled:', voiceEnabled);
-    console.log('speechSynthesis available:', !!window.speechSynthesis);
-
-    if (!voiceEnabled) {
-      console.log('Voice is disabled, skipping TTS');
-      return;
-    }
-
-    if (!window.speechSynthesis) {
-      console.error('Speech synthesis not supported');
-      return;
-    }
-
-    try {
-      window.speechSynthesis.cancel(); // Stop any ongoing speech synthesis
-
-      // Clean the text (remove extra formatting)
-      const cleanText = text
-        .replace(/\n/g, ' ')
-        .replace(/Result:\s*/g, '')
-        .trim();
-      console.log('Clean text for TTS:', cleanText);
-
-      if (!cleanText || cleanText.length === 0) {
-        console.log('No text to speak');
-        return;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      // Add event listeners for debugging
-      utterance.onstart = () => {
-        console.log('TTS started');
-      };
-
-      utterance.onend = () => {
-        console.log('TTS ended');
-      };
-
-      utterance.onerror = (event) => {
-        console.error('TTS error:', event);
-      };
-
-      // Wait a bit before speaking (sometimes needed for browser compatibility)
-      setTimeout(() => {
-        console.log('Starting speech synthesis...');
-        window.speechSynthesis.speak(utterance);
-      }, 100);
-    } catch (error) {
-      console.error('Error in speech synthesis:', error);
-    }
-  };
-  // --------------------------------
+  // —— 可选：UI 快照（如果以后 ActionProvider 需要，也可通过 window 读到）——
+  const [envState, setEnvState] = useState({
+    temperature: 0,
+    humidity: 0,
+    light: 0,
+    soilHumidity: 0,
+    waterLevel: 0,
+    steam: 0,
+  });
 
   useEffect(() => {
-    const savedVoicePreference = localStorage.getItem('voice-enabled');
-    const initialValue = savedVoicePreference !== null ? savedVoicePreference === 'true' : true;
-    setVoiceEnabled(initialValue);
-    setCustomConfig(createCustomConfig(initialValue));
-  }, []);
+    if (!isOpen) return;
+    const readNumber = (sel: string) => {
+      const el = document.querySelector<HTMLElement>(sel);
+      if (!el) return null;
+      const m = (el.innerText || el.textContent || '').match(/-?\d+(?:\.\d+)?/);
+      return m ? Number(m[0]) : null;
+    };
+    const domSnapshot = {
+      temperature: readNumber('[data-sensor="temperature"]') ?? envState.temperature,
+      humidity: readNumber('[data-sensor="humidity"]') ?? envState.humidity,
+      light: readNumber('[data-sensor="light"]') ?? envState.light,
+      soilHumidity: readNumber('[data-sensor="soilHumidity"]') ?? envState.soilHumidity,
+      waterLevel: readNumber('[data-sensor="waterLevel"]') ?? envState.waterLevel,
+      steam: readNumber('[data-sensor="steam"]') ?? envState.steam,
+    };
+    setEnvState(domSnapshot);
+  }, [isOpen]); // 仅在打开时更新一次
 
+  // —— 欢迎语（语音）——
+  const greetingText = "Hi! I'm PlantBot. Ask me about your plants.";
+  const greetingSpokenRef = useRef(false);
+  useEffect(() => {
+    if (isOpen && voiceEnabled && !greetingSpokenRef.current) {
+      greetingSpokenRef.current = true;       // 先置位，避免重复
+      speakText("Hi! I'm PlantBot. Ask me about your plants.");
+    }
+  }, [isOpen, voiceEnabled]);
+
+  // —— 将文本写入聊天输入框（用于 STT 手动发送模式）——
+  const putIntoChatInput = (text: string) => {
+    const input =
+      document.querySelector<HTMLInputElement>('.react-chatbot-kit-chat-input') ||
+      document.querySelector<HTMLTextAreaElement>('.react-chatbot-kit-chat-input');
+    if (!input) return;
+
+    const proto = Object.getPrototypeOf(input);
+    const valueSetter =
+      Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set ||
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+
+    if (valueSetter) valueSetter.call(input, text);
+    else (input as any).value = text;
+
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    input.focus();
+    const len = text.length;
+    (input as any).setSelectionRange?.(len, len);
+  };
+
+  // —— 从语音结果直接发送 —— 
+  const sendMessageFromSTT = async (text: string) => {
+    const msg = text.trim();
+    if (!msg) return;
+
+    // 先把“用户消息”插入到对话
+    chatbotActionProviderRef.current?.setState((prev: any) => ({
+      ...prev,
+      messages: [...(prev.messages || []), createClientMessage(msg)],
+    }));
+
+    // 再调用 ActionProvider 的处理函数
+    await chatbotActionProviderRef.current?.handleUserMessage(msg);
+  };
+
+  // —— 朗读（TTS）——
+  const speakText = (raw: string) => {
+    if (!voiceEnabled || !window.speechSynthesis) return;
+
+    const text = String(raw ?? '')
+      .replace(/\n+/g, ' ')
+      .replace(/^Result:\s*/i, '')
+      .trim();
+    if (!text) return;
+
+    const synth = window.speechSynthesis;
+    // 防抖：若队列里有，先清
+    synth.cancel();
+
+    const doSpeak = () => {
+      const utt = new SpeechSynthesisUtterance(text);
+      const wantZh = /[\u4e00-\u9fa5]/.test(text);
+      const prefer = wantZh ? 'zh' : 'en';
+      const voices = synth.getVoices() || [];
+      const voice =
+        voices.find((v) => v.lang?.toLowerCase().startsWith(prefer)) ||
+        voices.find((v) => v.default) ||
+        voices[0];
+      if (voice) {
+        utt.voice = voice;
+        utt.lang = voice.lang || (wantZh ? 'zh-CN' : 'en-US');
+      } else {
+        utt.lang = wantZh ? 'zh-CN' : 'en-US';
+      }
+      utt.rate = 1.0;
+      utt.pitch = 1.0;
+      synth.speak(utt);
+    };
+
+    // 有些浏览器第一次需要等待 voices 加载，但要避免“既监听又立即 speak”重复
+    if ((window.speechSynthesis.getVoices() || []).length === 0) {
+      const once = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', once);
+        doSpeak();
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', once);
+    } else {
+      doSpeak();
+    }
+  };
+
+
+  // 供外部调 TTS
+  (window as any).__speakText = (text: string) => {
+    try {
+      if (voiceEnabled) speakText(String(text ?? ''));
+    } catch { }
+  };
+
+  // —— 语音偏好持久化 —— 
+  useEffect(() => {
+    const saved = localStorage.getItem('voice-enabled');
+    const initial = saved !== null ? saved === 'true' : true;
+    setVoiceEnabled(initial);
+    setCustomConfig(createCustomConfig(initial));
+  }, []);
   useEffect(() => {
     setCustomConfig(createCustomConfig(voiceEnabled));
   }, [voiceEnabled]);
 
-  const toggleChatbot = () => {
-    setIsOpen((prev) => !prev);
-  };
+  const toggleChatbot = () => setIsOpen((prev) => !prev);
 
-  // // control motor
-
-  // const moveMotor = async (angle: number) => {
-  //   await axios('http://localhost:5000/api/move_motor', {
-  //     method: 'POST',
-  //     headers: { 'Content-Type': 'application/json' },
-  //     body: JSON.stringify({ angle }),
-  //   });
-  // };
-
-  // console.log('moveMotor', moveMotor);
-
+  // —— 语音识别（STT）——
   const startListening = () => {
     if (!voiceEnabled) {
       alert('Voice input is disabled. Please enable voice in the settings to use this feature.');
       return;
     }
-
     const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
+      (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) {
       console.error('Speech recognition not supported in this browser.');
       return;
     }
+    const rec = new SpeechRecognition();
+    recognitionRef.current = rec;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.lang = 'en-US';
 
-    // if (!voiceEnabled) return;
-
-    // const SpeechRecognition =
-    //   (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    // if (!SpeechRecognition) {
-    //   console.error('Speech recognition not supported in this browser.');
-    //   return;
-    // }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    // recognition.start();
-
-    recognition.onresult = async (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      console.log('User said:', transcript);
-
-      const userMessage = createChatBotMessage(transcript, { withAvatar: false });
-
-      // setChatbotState((prev: any) => ({
-      //   ...prev,
-      //   messages: [...prev.messages, userMessage],
-      // }));
-
-      // 1. Show user message in chat window
-      // if (chatbotState) {
-      //   chatbotState((prevState: any) => ({
-      //     ...prevState,
-      //     messages: [...prevState.messages, userMessage],
-      //   }));
-      // }
-
-      if (chatbotActionProviderRef.current && chatbotActionProviderRef.current.setState) {
-        chatbotActionProviderRef.current.setState((prevState: any) => ({
-          ...prevState,
-          messages: [...(prevState.messages || []), userMessage],
-        }));
-      }
-
-      try {
-        // 2. Send directly to backend
-        const res = await axios.post('http://localhost:5000/api/chat_simple', {
-          question: transcript,
-        });
-
-        const answer = res.data.answer;
-        console.log('Raw answer from backend:', answer);
-        console.log('Answer type:', typeof answer);
-
-        // Extract clean text from the response
-        let cleanAnswer = answer;
-        if (typeof answer === 'string') {
-          // Remove "Result:" prefix and clean up formatting
-          cleanAnswer = answer
-            .replace(/^Result:\s*/i, '')
-            .replace(/\n+/g, ' ')
-            .trim();
-        }
-        console.log('Clean answer for TTS:', cleanAnswer);
-
-        // 3. Manually trigger ActionProvider response
-        // const actionProvider = new ActionProvider(
-        //   createChatBotMessage,
-        //   chatbotState,
-        //   null,
-        //   voiceEnabled,
-        // );
-
-        // 3. Create bot message with original answer (for display)
-        const botMessage = createChatBotMessage(answer);
-
-        // 4. Add bot message to chat and speek to response
-
-        // 4. Add bot message to chat AND speak after state update is complete
-        if (chatbotActionProviderRef.current && chatbotActionProviderRef.current.setState) {
-          chatbotActionProviderRef.current.setState((prevState: any) => {
-            const newState = {
-              ...prevState,
-              messages: [...(prevState.messages || []), botMessage],
-            };
-
-            // if (chatbotActionProviderRef.current && chatbotActionProviderRef.current.setState) {
-            //   chatbotActionProviderRef.current.setState((prevState: any) => ({
-            //     ...prevState,
-            //     messages: [...(prevState.messages || []), botMessage],
-            //   }));
-            // chatbotActionProviderRef.current.handleResponse(answer);
-            // 5. speek the response
-
-            // 5. Use setTimeout to ensure the state update is processed before speaking
-            setTimeout(() => {
-              console.log('About to call speakText with clean answer:', cleanAnswer);
-              speakText(cleanAnswer);
-            }, 100);
-
-            return newState;
-          });
-        }
-
-        // 4. Show bot response in chat window
-      } catch (error) {
-        console.error('Error sending to backend:', error);
-        const errorMessage = createChatBotMessage('Sorry, something went wrong.');
-
-        if (chatbotActionProviderRef.current && chatbotActionProviderRef.current.setState) {
-          chatbotActionProviderRef.current.setState((prevState: any) => ({
-            ...prevState,
-            messages: [...(prevState.messages || []), errorMessage],
-          }));
-
-          speakText('Sorry, something went wrong.');
-        }
-      }
-    };
-
-    //   // Find Chatbot input textarea and set the value
-    //   const inputEl = document.querySelector<HTMLInputElement>('.react-chatbot-kit-chat-input');
-    //   const form = document.querySelector<HTMLFormElement>('.react-chatbot-kit-chat-btn-send');
-
-    //   if (inputEl) {
-    //     inputEl.value = transcript;
-    //     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-    //   }
-
-    //   // Trigger enter/send
-    //   // if (form) {
-    //   //   form.click();
-    //   // }
-
-    //   // simulate pressing enter key
-    //   const enterKeyEvent = new KeyboardEvent('keydown', {
-    //     bubbles: true,
-    //     cancelable: true,
-    //     key: 'Enter',
-    //     code: 'Enter',
-    //     charCode: 13,
-    //     keyCode: 13,
-    //     which: 13,
-    //   });
-    //   inputEl?.dispatchEvent(enterKeyEvent);
-    //   // form.dispatchEvent(enterKeyEvent);
-    // };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      alert('Error occurred in recognition: ' + event.error);
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
     setIsListening(true);
-  };
+    setSttText('');
+    let finalText = '';
+    let lastDraft = '';
 
+    rec.onresult = (e: any) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t;
+        else interim += t;
+      }
+      lastDraft = (finalText + interim).trim();
+      setSttText(lastDraft);
+      if (!autoSend) putIntoChatInput(lastDraft);
+    };
+    rec.onerror = (err: any) => {
+      console.error('STT error:', err);
+      setIsListening(false);
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      const text = (lastDraft || finalText || '').trim();
+      if (!text) return;
+      // 只把结果放进输入框，不自动发送
+      setSttText(text);
+      putIntoChatInput(text);
+    };
+
+    rec.start();
+  };
   const stopListening = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -315,43 +237,27 @@ const ChatbotComponent: React.FC = () => {
     }
   };
 
-  // Create custom ActionProvider with voice settings
-  // const customActionProvider = (props: any) => {
-  //   const actionProvider = new ActionProvider(
-  //     props.createChatBotMessage,
-  //     props.setState,
-  //     undefined,
-  //     voiceEnabled,
-  //   ); // new
-  // Create custom ActionProvider class with voice settings
+  /**
+   * ✅ 关键改动：
+   * 我们不再向 ActionProvider 传“自定义对象参数”，而是遵循 react-chatbot-kit 的标准构造：
+   * new ActionProvider(createChatBotMessage, setState)
+   * 为了继续拿到实例（用于 STT 直接发送），用一个轻量“代理类”把真实实例存到 ref 上。
+   */
   const customActionProvider = class {
-    constructor(createChatBotMessage: any, setStateFunc: any, navigate: any) {
-      const actionProvider = new ActionProvider(
-        createChatBotMessage,
-        setStateFunc,
-        navigate,
-        voiceEnabled,
-      );
-
-      // new things
-      // store references for SST usage
-      chatbotActionProviderRef.current = actionProvider; // new
-
-      // Copy all methods from ActionProvider to this instance
-      Object.setPrototypeOf(this, actionProvider);
-      Object.assign(this, actionProvider);
-
-      return actionProvider; // new
+    constructor(createChatBotMessage: any, setStateFunc: any /*, navigate?: any */) {
+      const real = new ActionProvider(createChatBotMessage, setStateFunc);
+      chatbotActionProviderRef.current = real;
+      Object.setPrototypeOf(this, real);
+      Object.assign(this, real);
+      return real;
     }
   };
 
   return (
     <div>
-      {/* chatbot toggle button */}
+      {/* toggle 按钮 */}
       <button
         onClick={toggleChatbot}
-        // <MaterialSymbol icon='chat' size={24} grade={-25} color={theme.palette.primary6} />
-
         style={{
           position: 'fixed',
           bottom: '20px',
@@ -369,44 +275,13 @@ const ChatbotComponent: React.FC = () => {
           justifyContent: 'center',
           boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.2)',
         }}
+        aria-label={isOpen ? 'Close chat' : 'Open chat'}
+        title={isOpen ? 'Close' : 'Open'}
       >
         {isOpen ? '✖' : '💬'}
       </button>
 
-      {/* voice button */}
-
-      {isOpen && (
-        <>
-          <div
-            style={{
-              position: 'fixed',
-              bottom: '90px',
-              right: '30px',
-              width: '100%',
-              maxWidth: '500px',
-              height: '100%',
-              maxHeight: '700px',
-              borderRadius: '10px',
-              boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.2)',
-              backgroundColor: 'white',
-              padding: '10px',
-            }}
-          >
-            <span style={{ marginRight: 8 }}>Voice:</span>
-            <Switch
-              checked={voiceEnabled}
-              onChange={(checked) => {
-                localStorage.setItem('voice-enabled', checked.toString());
-                setVoiceEnabled(checked);
-              }}
-              style={{ marginRight: 12 }}
-            />
-          </div>
-        </>
-      )}
-
-      {/* chatbot component */}
-
+      {/* 面板 */}
       <div
         style={{
           position: 'fixed',
@@ -421,84 +296,87 @@ const ChatbotComponent: React.FC = () => {
           backgroundColor: 'white',
           padding: '10px',
           transition: 'opacity 0.3s ease-in-out, visibility 0.3s ease-in-out',
-          opacity: isOpen ? 1 : 0, // Smooth fade effect
-          visibility: isOpen ? 'visible' : 'hidden', // Completely hides when closed
-          overflow: 'hidden', // Ensures content stays within the container
+          opacity: isOpen ? 1 : 0,
+          visibility: isOpen ? 'visible' : 'hidden',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          zIndex: 9999,
         }}
+        aria-hidden={!isOpen}
       >
-        <span>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600 }}>Voice:</span>
+          <Switch
+            checked={voiceEnabled}
+            onChange={(checked) => {
+              localStorage.setItem('voice-enabled', checked.toString());
+              setVoiceEnabled(checked);
+              setCustomConfig(createCustomConfig(checked));
+            }}
+            style={{ marginRight: 12 }}
+          />
+
           <button
             onClick={isListening ? stopListening : startListening}
             disabled={!voiceEnabled}
             style={{
               padding: '6px 12px',
-              borderRadius: '20px',
+              borderRadius: 20,
               border: 'none',
-              backgroundColor: voiceEnabled ? '#4CAF50' : '#ccc',
-              color: 'white',
-              fontWeight: 'bold',
+              backgroundColor: isListening ? '#E53935' : voiceEnabled ? '#673AB7' : '#ccc',
+              color: '#fff',
+              fontWeight: 600,
               cursor: voiceEnabled ? 'pointer' : 'not-allowed',
               opacity: voiceEnabled ? 1 : 0.6,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.3s ease',
             }}
           >
-            <span>{isListening ? '⏹ Stop Listening' : '🎙 Start Listening'}</span>
+            {isListening ? '■ Stop' : '🎤 Speak'}
           </button>
-          {/* <Chatbot config={config} messageParser={MessageParser} actionProvider={ActionProvider} /> */}
-          {/* Test TTS Button */}
+
+          {/* <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={autoSend}
+              onChange={(e) => setAutoSend(e.target.checked)}
+            />
+            Auto-send
+          </label> */}
+
           <button
-            onClick={() => speakText('The today temperature is 21 degrees Celsius.')}
+            onClick={() => {
+              const last = (window as any).__lastBotText;
+              speakText(last || 'No recent reply.');
+            }}
             disabled={!voiceEnabled}
             style={{
               padding: '6px 12px',
-              borderRadius: '20px',
+              borderRadius: 20,
               border: 'none',
               backgroundColor: voiceEnabled ? '#2196F3' : '#ccc',
-              color: 'white',
-              fontWeight: 'bold',
+              color: '#fff',
+              fontWeight: 600,
               cursor: voiceEnabled ? 'pointer' : 'not-allowed',
               opacity: voiceEnabled ? 1 : 0.6,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.3s ease',
-              fontSize: '12px',
-              flex: 1,
             }}
           >
-            <span>🔊 TTS button </span>
+            🔊 Test TTS
           </button>
-        </span>
+        </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {/* 聊天主体 */}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <Chatbot
             config={customConfig}
             messageParser={MessageParser}
-            actionProvider={
-              customActionProvider
-              // class CustomActionProvider extends ActionProvider {
-              //   constructor(createChatBotMessage: any, setStateFunc: any, navigate: any) {
-              //     super(createChatBotMessage, setStateFunc, navigate, voiceEnabled);
-              //     chatbotActionProviderRef.current = this;
-              //     chatbotstateRef.current = setStateFunc;
-              //   }
-            }
+            actionProvider={customActionProvider}
           />
         </div>
-      </div>
-
-      <div>
-        {/* {isOpen && (
-          <Chatbot config={config} messageParser={MessageParser} actionProvider={ActionProvider} />
-        )} */}
       </div>
     </div>
   );
 };
 
 export default ChatbotComponent;
-
-// ------------ version 2--------------

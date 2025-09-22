@@ -71,3 +71,125 @@
   background-color: white !important;
   border-top: 1px solid #eee !important;
 }
+
+/* Bot 消息容器永远靠左，头像贴气泡 */
+.react-chatbot-kit-chat-bot-message-container {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  margin: 6px 0 !important;
+}
+
+/* User 消息容器永远靠右 */
+.react-chatbot-kit-user-chat-message-container {
+  display: flex !important;
+  justify-content: flex-end !important;
+  margin: 6px 0 !important;
+}
+
+/* 颜色恢复到之前清晰的方案 */
+.react-chatbot-kit-chat-bot-message {
+  background: #376b7e !important; /* 之前的蓝绿色 */
+  color: #fff !important;
+  border-radius: 14px !important;
+  padding: 8px 12px !important;
+  max-width: 78% !important;
+}
+
+.react-chatbot-kit-user-chat-message {
+  background: #4caf50 !important; /* 你现在用的绿色 */
+  color: #fff !important;
+  border-radius: 14px !important;
+  padding: 8px 12px !important;
+  max-width: 78% !important;
+}
+/* === Force left/right alignment, avatar position, and clean colors === */
+
+/* Bot container: left, avatar -> bubble */
+.react-chatbot-kit-chat-bot-message-container {
+  display: flex !important;
+  flex-direction: row !important; /* avatar 在左、气泡在右 */
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  margin: 6px 0 !important;
+}
+
+/* User container: right, bubble on the right */
+.react-chatbot-kit-user-chat-message-container {
+  display: flex !important;
+  flex-direction: row-reverse !important; /* 头像（若有）在右、气泡靠右 */
+  justify-content: flex-end !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  margin: 6px 0 !important;
+}
+
+/* Bot bubble: stick to the left column; lighter color */
+.react-chatbot-kit-chat-bot-message {
+  margin-right: auto !important; /* 让 Bot 气泡“占左边” */
+  margin-left: 0 !important;
+  background: #eaf3f7 !important; /* 更清爽的浅色 */
+  color: #1d2a35 !important;
+  border-radius: 14px !important;
+  padding: 8px 12px !important;
+  max-width: 78% !important;
+}
+
+/* User bubble: stick to the right column; keep your green */
+.react-chatbot-kit-user-chat-message {
+  margin-left: auto !important; /* 让 User 气泡“占右边” */
+  margin-right: 0 !important;
+  background: #4caf50 !important;
+  color: #fff !important;
+  border-radius: 14px !important;
+  padding: 8px 12px !important;
+  max-width: 78% !important;
+}
+
+/* 头像与气泡更贴合（可选） */
+.react-chatbot-kit-chat-bot-avatar-container {
+  align-self: flex-start !important;
+}
+
+/* ===== User：头像在右，气泡在左，顶端对齐 ===== */
+.react-chatbot-kit-user-chat-message-container {
+  display: flex !important;
+  flex-direction: row !important;          /* 从左到右排：气泡在左，头像在右 */
+  justify-content: flex-end !important;    /* 整体贴右 */
+  align-items: flex-start !important;      /* ✅ 顶端对齐头像与气泡 */
+  gap: 18px !important;                     /* 气泡与头像间距 */
+  margin: 6px 0 !important;
+}
+
+/* 用户气泡：在头像左侧 */
+.react-chatbot-kit-user-chat-message {
+  order: 1 !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  position: relative !important;           /* 为箭头定位做准备 */
+  max-width: 78% !important;
+  background: #4CAF50 !important;
+  color: #fff !important;
+  border-radius: 14px !important;
+  padding: 8px 12px !important;
+}
+
+/* 用户头像：在最右 */
+.react-chatbot-kit-user-avatar-container,
+.react-chatbot-kit-user-avatar {
+  order: 2 !important;
+  align-self: flex-start !important;       /* ✅ 顶端对齐 */
+  margin: 0 !important;
+}
+
+/* ===== 用户气泡箭头：垂直居中对准头像，但与头像保持距离 ===== */
+.react-chatbot-kit-user-chat-message-arrow {
+  position: absolute !important;
+  right: -8px !important;                 /* 箭头到头像的固定间距 */
+  left: auto !important;
+  top: 50% !important;                     /* 箭头垂直居中 */
+  transform: translateY(-50%) !important;
+  border-left-color: #4CAF50 !important;   /* 同气泡背景色 */
+}
