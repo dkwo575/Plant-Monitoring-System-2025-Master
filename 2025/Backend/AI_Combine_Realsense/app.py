@@ -1238,10 +1238,262 @@ def report_status():
 
 
 
+# Function for Chatbot that using LLM and VLM for unprofessional farmers
 
+# Model configuration - choose your model here
+AVAILABLE_MODEL = {
+
+    "gemini-2.5-flash" : {
+        "loader" : lambda: ChatGoogleGenerativeAI(model = "gemini-2.5-flash", temperature = 0.1,),
+        "package" : "langchain_google_genai",
+        "type" : "text"
+    },
+
+    "gemma-3-27b" : {
+        "loader" : lambda: ChatOpenAI(model = "google/gemma-3-27b-it:free", openai_api_key = openrouterAPI, base_url = "https://openrouter.ai/api/v1"), #HuggingFaceEndpoint(repo_id = "google/gemma-3-27b-it", temperature = 0.1, max_new_tokens = 512),
+        "package" : "langchain_huggingface",
+        "type" : "multimodal"
+    },
+
+    "gpt5": {
+        "loader" : lambda: ChatOpenAI(model_name="gpt-5-mini"),
+        "package" : "langchain_openai",
+        "type" : "text"
+    },
+    "gemini-2.5-pro" : {
+        "loader" : lambda: ChatGoogleGenerativeAI(model = "gemini-2.5-pro", temperature = 0.1,),
+        "package" : "langchain_google_genai",
+        "type" : "multimodal"
+    },
+    # "gemma-3-4b-local": {
+    #     # The loader now creates an instance of our custom class
+    #     "loader": lambda: create_local_vlm_pipeline(r"D:\UOA2\2025_Master\finetuned_model\quantized_Qwen2.5-VL-7B-Instruct"),
+    #     "package": "local",
+    #     "type": "multimodal"
+    # },
+    # "gemma-3-4b-local": {
+    #     "loader" : lambda : LocalFineTunedMultimodal(model_path = r"D:\UOA2\2025_Master\finetuned_model\quantized_Qwen2.5-VL-7B-Instruct"),
+    #     "package" : "local",
+    #     "type": "multimodal"
+    # },
+
+    "openai-oss" : {
+        "loader" : lambda : ChatGroq(model = "openai/gpt-oss-20b", temperature = 0.1),
+        "package" : "langchain_groq",
+        "type" : "text"
+    },
+    "qwen2.5-VL" : {
+        "loader" : lambda : ChatOpenAI(model = "qwen/qwen2.5-vl-72b-instruct:free", openai_api_key = openrouterAPI, base_url = "https://openrouter.ai/api/v1"),
+        "package" : "langchain_openai",
+        "type" : "multimodal"
+    }
+
+}
+
+def image_to_base64(image_file):
+    """ the function is to convert image file to base64 string"""
+
+    try:
+        buffered = io.BytesIO()
+        # Ensure image is in RGB mode
+        if image_file.mode != 'RGB':
+            image_file = image_file.convert('RGB')
+        image_file.save(buffered, format="JPEG")
+        return base64.b64encode(buffered.getvalue()).decode('utf-8')
+    except Exception as e:
+        print(f"Error in image_to_base64: {e}")
+        raise
+        
+
+@app.route('/api/health', methods = ['GET'])
+def health_check():
+    """ health check endpoint"""
+    # model_status = "initialized" if llm is not None else "not initialized"
+    #
+    # return jsonify({
+    #     'status': 'healthy',
+    #     'model': MODEL_CONFIG['model_name'],
+    #     'model_status': model_status,
+    #     'model_type': MODEL_CONFIG['model_type'],
+    #     'api_type': MODEL_CONFIG['api_type'],
+    #     'hf_token_configured': bool('inferenceAPI'),
+    #     'timestamp': datetime.datetime.now(tz=nz).isoformat()
+    # return jsonify({
+    #     "status": "ok" if llm else "error",
+    #     "model": MODEL_NAME,
+    #     "available models" : list(AVAILABLE_MODEL.keys())
+    # })
+
+    # try:
+    #     test_model_id = "gemini-2.5-flash"
+    #
+    #     if test_model_id in AVAILABLE_MODEL:
+    #         try:
+    #             model_status = {
+    #                 "status": "connected",
+    #                 "models": list(AVAILABLE_MODEL.keys()),
+    #                 "text_models": [k for k, v in AVAILABLE_MODEL.items() if v["type"] == "text"],
+    #                 "multimodal_models": [k for k, v in AVAILABLE_MODEL.items() if v["type"] == "multimodal"],
+    #                 "test_model": test_model_id,
+    #                 "test_result": "success"
+    #             }
+    #             return jsonify(model_status), 200
+    #         except Exception as e:
+    #             return jsonify({
+    #                 "status": "partial",
+    #                 "models": list(AVAILABLE_MODEL.keys()),
+    #                 "text_models": [k for k, v in AVAILABLE_MODEL.items() if v["type"] == "text"],
+    #                 "multimodal_models": [k for k, v in AVAILABLE_MODEL.items() if v["type"] == "multimodal"],
+    #                 "test_model": test_model_id,
+    #                 "test_result": "failed",
+    #                 "error": str(e)
+    #             }), 200
+    #         else:
+    #             return jsonify({
+    #                 "status": "error",
+    #                 "message": "No test model available",
+    #                 "models": list(AVAILABLE_MODEL.keys())
+    #             }), 500
+    #
+    #         except Exception as e:
+    #         return jsonify({
+    #             "status": "disconnected",
+    #             "error": str(e),
+    #             "models": []
+    #         }), 500
+
+        # test a simple model to vericy basic connnection
+
+    return jsonify({"status" : "connected", "models" : list(AVAILABLE_MODEL.keys())}), 200
+
+@app.route('/api/chat', methods=['POST'])
+def handle_chat():
+    """Handles both text-only and multimodal chat requests."""
+    is_image_request = 'image' in request.files
+
+    if is_image_request:
+        return handle_image_request()
+    else:
+        return handle_text_request()
+
+
+def handle_image_request():
+    """Handle multimodal (image + text) requests."""
+    try:
+        if 'image' not in request.files:
+            return jsonify({"error": "No image file in request"}), 400
+
+        image_file = request.files['image']
+        if image_file.filename == '':
+            return jsonify({"error": "No image file selected"}), 400
+
+        prompt = request.form.get('message', 'Describe the image.')
+        model_id = request.form.get('model', 'gemini-2.5-pro')
+
+        # Validation
+        if model_id not in AVAILABLE_MODEL:
+            available_multimodal = [k for k, v in AVAILABLE_MODEL.items() if v["type"] == "multimodal"]
+            return jsonify({
+                "error": f"Model '{model_id}' not found. Available multimodal models: {available_multimodal}"
+            }), 400
+
+        if AVAILABLE_MODEL[model_id]["type"] != "multimodal":
+            return jsonify({
+                "error": f"Model '{model_id}' is not a multimodal model."
+            }), 400
+
+        # Open the image safely
+        image_file.stream.seek(0)
+        image = Image.open(image_file.stream).convert("RGB")
+
+        # Convert to base64 for consistency
+        base64_img = image_to_base64(image)
+
+        # Construct HumanMessage
+        message = HumanMessage(
+            content=[
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": f"data:image/jpeg;base64,{base64_img}"}
+            ]
+        )
+
+        # Load model + invoke
+        llm = AVAILABLE_MODEL[model_id]["loader"]()
+        response = llm.invoke([message])
+
+        response_content = response if isinstance(response, str) else response.content
+        return jsonify({"response": response_content.strip()})
+
+    except Exception as error:
+        import traceback
+        print(f"Error processing image request: {error}")
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to process image: {str(error)}"}), 500
+
+
+def handle_text_request():
+    """Handle text-only requests."""
+    try:
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({"error": "Message is required."}), 400
+
+        prompt = data['message']
+        model_id = data.get('model', 'gemini-2.5-flash')
+
+        # Validation
+        if model_id not in AVAILABLE_MODEL:
+            available_models = [k for k, v in AVAILABLE_MODEL.items() if v["type"] in ["text", "multimodal"]]
+            return jsonify({
+                "error": f"Model '{model_id}' not found. Available models: {available_models}"
+            }), 400
+
+        # Allow both text and multimodal models for text-only requests
+        if AVAILABLE_MODEL[model_id]["type"] not in ["text", "multimodal"]:
+            return jsonify({
+                "error": f"Model '{model_id}' cannot handle text requests."
+            }), 400
+
+        # Create and invoke the model
+        llm_text = AVAILABLE_MODEL[model_id]["loader"]()
+
+        message_txt = [
+            (
+                "system",
+                "You are a helpful assistant that answers based on user questions. If you can't understand or are not sure, just say 'I don't know'. "
+                "Our user is normally an unprofessional farmer."
+            ),
+            ("human", prompt)
+        ]
+        response = llm_text.invoke(message_txt)
+
+        # Process response - MOVED INSIDE TRY BLOCK
+        response_content = response if isinstance(response, str) else response.content
+        return jsonify({"response": response_content.strip()})
+
+    except Exception as error:
+        import traceback
+        print(f"Error processing text request: {error}")
+        traceback.print_exc()
+        return jsonify({
+            "error": f"Failed to process text with model '{model_id}': {str(error)}"
+        }), 500
+
+
+@app.route("/api/conversation/<conversation_id>", methods=["DELETE"])
+def delete_conversation(conversation_id):
+    """
+    Clears the conversation history for a given conversation ID.
+    """
+    if conversation_id in conversation_history:
+        del conversation_history[conversation_id]
+        return jsonify({"message": f"Conversation {conversation_id} cleared."}), 200
+    return jsonify({"error": "Conversation not found"}), 404
 
 
 #  Function for condition evaluation and action execution
+
+
 
 
 
