@@ -1038,6 +1038,133 @@ def generate_report():
 
 
 
+@app.route('/api/report_bydate', methods=['GET'])
+def generate_report_bydate():
+    try:
+        period = request.args.get('period', 'weekly')  # Default to weekly report
+        report_format = request.args.get('format', 'pdf')  # Default to PDF format
+
+        # Get custom start and end dates from parameters
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        use_custom_date = request.args.get('use_custom_date', 'false').lower() == 'true'
+
+        if use_custom_date and start_date_str and end_date_str:
+            # Use custom dates if provided
+            try:
+                start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d')
+                end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d')
+
+                # Convert to your timezone
+                start_date = start_date.replace(tzinfo=nz)
+                # Set end_date to end of day to include all data from that day
+                end_date = end_date.replace(hour=23, minute=59, second=59, tzinfo=nz)
+
+                print(f"Using custom dates: {start_date} to {end_date}")  # Debug log
+
+            except ValueError as e:
+                print(f"Date parsing error: {str(e)}")
+                return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+        else:
+            # Original logic - calculate from current date backwards
+            end_date = datetime.datetime.now(nz)
+
+            if period == 'weekly':
+                start_date = end_date - datetime.timedelta(days=7)
+            elif period == 'monthly':
+                start_date = end_date - datetime.timedelta(days=30)
+            else:
+                return jsonify({"error": "Invalid period specified. Use 'weekly' or 'monthly'."}), 400
+
+            print(f"Using default dates: {start_date} to {end_date}")  # Debug log
+
+        # Validate date range
+        if start_date >= end_date:
+            return jsonify({"error": "Start date must be before end date."}), 400
+
+        # Fetch data from the database
+        try:
+            query = db.session.query(Environments).filter(Environments.timestamp.between(start_date, end_date))
+            df = pd.read_sql(query.statement, db.engine)
+            print(f"Query returned {len(df)} rows")  # Debug log
+        except Exception as e:
+            print(f"Database query error: {str(e)}")
+            return jsonify({"error": "Database query failed."}), 500
+
+        if df.empty:
+            return jsonify({"error": "No data available for the specified period."}), 404
+
+        # Generate graphs with proper date range in filename
+        graph_paths = []
+        sensor_columns = ['temperature', 'humidity', 'light', 'soilHumidity', 'waterLevel', 'steam']
+
+        print(f"Available columns in dataframe: {list(df.columns)}")  # Debug log
+
+        for col in sensor_columns:
+            graph_path = f"static/graphs/{col}_{start_date.strftime('%Y%m%d')}_to_{end_date.strftime('%Y%m%d')}.png"
+            print(f"Generating graph for {col} at path: {graph_path}")  # Debug log
+
+            # Check if column exists in dataframe
+            if col in df.columns:
+                # Check if column has data
+                if not df[col].isna().all():
+                    success = create_graph(df, col, graph_path)
+                    if success and os.path.exists(graph_path):
+                        graph_paths.append(graph_path)
+                        print(f"Successfully generated and added graph for {col}")
+                    else:
+                        print(f"Failed to generate graph for {col}")
+                else:
+                    print(f"Warning: Column '{col}' has no data (all NaN values)")
+            else:
+                print(f"Warning: Column '{col}' not found in dataframe. Available columns: {list(df.columns)}")
+
+        print(f"Total graphs generated: {len(graph_paths)}")
+        print(f"Graph paths: {graph_paths}")
+
+        if len(graph_paths) == 0:
+            print("Warning: No graphs were generated!")
+
+        # Generate LLM summary
+        try:
+            summary = generate_llm_summary(df)
+        except Exception as e:
+            print(f"Error generating LLM summary: {str(e)}")
+            summary = "Summary could not be generated due to technical issues."
+
+        # Create report
+        if report_format == 'pdf':
+            try:
+                report_bio = create_pdf_report(summary, graph_paths)
+                mimetype = 'application/pdf'
+                # Use actual date range for filename
+                filename = f"{start_date.strftime('%Y-%m-%d')}_to_{end_date.strftime('%Y-%m-%d')}_report.pdf"
+
+                print(f"PDF report created successfully with filename: {filename}")
+
+                # Clean up temporary graph files (uncomment if needed)
+                # for path in graph_paths:
+                #     if os.path.exists(path):
+                #         os.remove(path)
+
+                return send_file(report_bio, mimetype=mimetype, as_attachment=True, download_name=filename)
+
+            except Exception as e:
+                print(f"Error creating PDF report: {str(e)}")
+                return jsonify({"error": f"Failed to create PDF report: {str(e)}"}), 500
+        else:
+            return jsonify({"error": "Invalid format specified. Use 'pdf'."}), 400
+
+    except Exception as e:
+        print(f"Unexpected error in generate_report: {str(e)}")
+        import traceback
+        traceback.print_exc()  # This will print the full stack trace
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+        
+        
+
+
+
 # ------------------------------------------------------
 #         # Extract action more reliably
 #         action = None
