@@ -813,21 +813,38 @@ def admin_chat():
 # ----------------------- Report generation ------------------------------
 
 def create_graph(df, column_name, file_path):
-    plt.figure(figsize=(10, 5))
-    plt.plot(df['timestamp'], df[column_name], marker='o', linestyle='-', color='b')
-    plt.title(f'{column_name.capitalize()} Over Time')
-    plt.xlabel('Timestamp')
-    plt.ylabel(column_name.capitalize())
-    plt.xticks(rotation=45)
-    plt.grid(True)
-    plt.savefig(file_path)
-    plt.close()
 
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(df['timestamp'], df[column_name], marker='o', linestyle='-', color='b', linewidth=2, markersize=4)
+        plt.title(f'{column_name.capitalize()} Over Time', fontsize = 16, fontweight = 'bold')
+        plt.xlabel('Timestamp', fontsize = 12)
+        plt.ylabel(column_name.capitalize(), fontsize = 12)
+        plt.xticks(rotation=45)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()  # This prevents labels from being cut off
+
+        plt.savefig(file_path, dpi=300, bbox_inches='tight')
+        plt.close()  # Important: close the figure to free memory
+
+        print(f"Graph saved successfully: {file_path}")
+        return True
+
+    except Exception as e:
+        print(f"Error creating graph for {column_name}: {str(e)}")
+        plt.close()  # Make sure to close even if there's an error
+        return False
+
+@traceable(run_type="chain")
 def generate_llm_summary(df):
     summary_prompt_V2 = f"""
     
     Analyze the following sensor data and provide a summary of the plant's health and environment.
     The data covers the period from {df['timestamp'].min()} to {df['timestamp'].max()}.
+    In the first line, include the date range of the data.
     
     Key statistics:
     - Temperature:
@@ -864,53 +881,126 @@ def generate_llm_summary(df):
         
     """
     summary_response = llm_openai.invoke(summary_prompt_V2)
+    with get_openai_callback() as callback:
+        print(f"Total Tokens: {callback.total_tokens}")
+        print(f"Prompt Tokens: {callback.prompt_tokens}")
+        print(f"Completion Tokens: {callback.completion_tokens}")
+        print(f"Total Cost: ${callback.total_cost}")
     return summary_response.content
 
-
 def create_pdf_report(summary, graph_paths):
+    try:
+        bio = BytesIO()
+        doc = SimpleDocTemplate(bio, pagesize=A4)
+        style = getSampleStyleSheet()
+        story = []
 
-    bio = BytesIO()
-    doc = SimpleDocTemplate(bio, pagesize=A4)
-    style = getSampleStyleSheet()
-    story = []
+        # Add title
+        story.append(Paragraph("Farm Environmental Report", style['Title']))
+        story.append(Spacer(1, 12))
 
-    story.append(Paragraph("Farm Environmental Report", style['Title']))
-    story.append(Spacer(1, 12))
-
-    # Replace newlines with HTML line breaks for proper rendering in the PDF
-    summary_with_breaks = summary.replace('\n', '<br/>')
-    story.append(Paragraph(summary_with_breaks, style['BodyText']))
-    story.append(Spacer(1, 24))
-
-    for graph_path in graph_paths:
-        # Extract the metric name from the file path to use as a subtitle
-        metric_name = os.path.basename(graph_path).split('_')[0].capitalize()
-        
-        # Add a subtitle for each graph
-        story.append(Paragraph(f"{metric_name} Over Time", style['h2']))
-        story.append(Spacer(1, 6))
-
-        img = Image(graph_path, width=400, height=300)
-        story.append(img)
+     # Add summary
+        story.append(Paragraph("Executive Summary", style['Heading2']))
+        summary_with_breaks = summary.replace('\n', '<br/>')
+        story.append(Paragraph(summary_with_breaks, style['BodyText']))
         story.append(Spacer(1, 24))
 
-    doc.build(story)
-    bio.seek(0)
-    return bio
+    # Add graphs section
+        story.append(Paragraph("Sensor Data Visualizations", style['Heading2']))
+        story.append(Spacer(1, 12))
+
+    # # Replace newlines with HTML line breaks for proper rendering in the PDF
+    # summary_with_breaks = summary.replace('\n', '<br/>')
+    # story.append(Paragraph(summary_with_breaks, style['BodyText']))
+    # story.append(Spacer(1, 24))
+
+
+    # Process each graph
+        graphs_added = 0
+        for i, graph_path in enumerate(graph_paths):
+            try:
+                print(f"Processing graph {i + 1}/{len(graph_paths)}: {graph_path}")
+
+                # Check if file exists
+                if not os.path.exists(graph_path):
+                    print(f"Warning: Graph file not found: {graph_path}")
+                    continue
+
+                # Check file size
+                file_size = os.path.getsize(graph_path)
+                if file_size == 0:
+                    print(f"Warning: Graph file is empty: {graph_path}")
+                    continue
+
+                # Extract sensor name from file path
+                sensor_name = os.path.basename(graph_path).split('_')[0]
+
+                # Add sensor name as subtitle
+                story.append(Paragraph(f"{sensor_name.capitalize()} Data", style['Heading3']))
+                story.append(Spacer(1, 6))
+
+                # Add the image
+                img = Image(graph_path, width=400, height=300)
+                story.append(img)
+                story.append(Spacer(1, 12))
+
+                graphs_added += 1
+                print(f"Successfully added graph for {sensor_name}")
+
+                # Add page break after every 2 graphs (except the last one)
+                if graphs_added % 2 == 0 and i < len(graph_paths) - 1:
+                    story.append(PageBreak())
+
+            except Exception as e:
+                print(f"Error processing graph {graph_path}: {str(e)}")
+                continue
+
+        print(f"Total graphs added to PDF: {graphs_added}/{len(graph_paths)}")
+
+        if graphs_added == 0:
+            story.append(Paragraph("No sensor graphs could be generated.", style['BodyText']))
+
+        # Build the PDF
+        doc.build(story)
+        bio.seek(0)
+
+        print("PDF report created successfully")
+        return bio
+
+    except Exception as e:
+        print(f"Error creating PDF report: {str(e)}")
+        # Return a basic PDF with just the summary if graph processing fails
+        bio = BytesIO()
+        doc = SimpleDocTemplate(bio, pagesize=A4)
+        story = [
+            Paragraph("Farm Environmental Report", style['Title']),
+            Spacer(1, 12),
+            Paragraph(summary, style['BodyText']),
+            Spacer(1, 12),
+            Paragraph("Note: Graphs could not be generated due to technical issues.", style['BodyText'])
+        ]
+        doc.build(story)
+        bio.seek(0)
+        return bio
+
 
 
 @app.route('/api/report', methods=['GET'])
 def generate_report():
-    period = request.args.get('period', 'weekly')  # Default to daily report
+    period = request.args.get('period', 'daily')  # Default to daily report
     report_format = request.args.get('format', 'pdf')  # Default to PDF format
+
+
 
     end_date = datetime.datetime.now(nz)
 
-    if period == 'weekly':
+    if period == 'daily':
+        start_date = end_date - datetime.timedelta(days=1)
+    elif period == 'weekly':
         start_date = end_date - datetime.timedelta(days=7)
     elif period == 'monthly':
         start_date = end_date - datetime.timedelta(days=30)
-    else:  # Default to daily report
+    else:
         return jsonify({"error": "Invalid period specified. Use 'daily', 'weekly', or 'monthly'."}), 400
 
     # Fetch data from the database
@@ -930,16 +1020,12 @@ def generate_report():
     # Generate LLM summary
     summary = generate_llm_summary(df)
 
-    current_date = datetime.datetime.now(nz).strftime("%Y-%m-%d %H:%M:%S")
-
-    # convert datetime obj to string
-    str_current_datetime = str(current_date)
-
     # Create report
     if report_format == 'pdf':
         report_bio = create_pdf_report(summary, graph_paths)
         mimetype = 'application/pdf'
-        filename = (str_current_datetime + "_report.pdf").replace(" ", "_").replace(":", "-")  # Replace spaces and colons for filename
+        filename = f"report_{start_date.strftime('%Y%m%d')}_to_{end_date.strftime('%Y%m%d')}.pdf"
+        print(f"Generated filename: {filename}")  # Debugging line
 
     else:
         return jsonify({"error": "Invalid format specified. Use 'pdf'."}), 400
@@ -948,7 +1034,8 @@ def generate_report():
     # for path in graph_paths:
     #     os.remove(path)
 
-    return send_file(report_bio, mimetype = mimetype, as_attachment= True, download_name=filename)
+    return send_file(report_bio, mimetype=mimetype, as_attachment=True, download_name=filename)
+
 
 
 # ------------------------------------------------------
