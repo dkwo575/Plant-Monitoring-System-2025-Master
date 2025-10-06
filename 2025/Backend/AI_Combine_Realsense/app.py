@@ -1163,6 +1163,29 @@ def generate_report_bydate():
         
         
 
+@app.route('/api/report_status', methods = ['GET'])
+def report_status():
+    def generate():
+        """Generate a report with real-time updates"""
+        yield "data: Start report generation...\n\n"
+        time.sleep(3)
+        yield "data : Generate graphs....\n\n"
+        time.sleep(4)
+        yield "data: Graphs generated successfully!\n\n"
+        time.sleep(3)
+        yield "data: Analyzing Data.....\n\n"
+        time.sleep(4)
+        yield "data: Compiling report...\n\n"
+        time.sleep(4)
+        yield "data: Almost done...\n\n"
+        try:
+            # Simulate report generation
+            time.sleep(4)  # Simulate some processing time
+            yield "data: Report generated successfully!\n\n"
+        except Exception as e:
+            yield f"data: Error generating report: {str(e)}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
 
 
 # ------------------------------------------------------
