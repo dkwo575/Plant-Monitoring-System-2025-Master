@@ -164,11 +164,11 @@ logger = logging.getLogger(__name__)
 openaikey = os.getenv('OPENAI_API_KEY')
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://DoJunKwon:AVNS_KE99pn7l6Y54WtmzIsQ@smartfarm2025-smartfarm25.g.aivencloud.com:28350/sensor_DB'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://add your things'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
-mysql_uri = f"mysql+pymysql://DoJunKwon:AVNS_KE99pn7l6Y54WtmzIsQ@smartfarm2025-smartfarm25.g.aivencloud.com:28350/sensor_DB"
+mysql_uri = f"mysql+pymysql://add your things"
 
 
 # # Initialize Langchain
