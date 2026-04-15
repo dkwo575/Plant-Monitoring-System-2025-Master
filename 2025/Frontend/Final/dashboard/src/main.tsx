@@ -15,9 +15,15 @@ import { randomiseData } from './mock-data-generation/dataRandomiser';
 import ImagePage from './pages/ImagePage';
 import AdministrationPage from './pages/AdministrationPage';
 import AdminLoginPage from './pages/AdminLoginPage';
+import ImageChatBoxPage from './pages/ImageChatBoxPage';
 import CapturePage from './pages/CapturePage';
 import ChatbotComponent from './components/ChatbotComponent';
 import AddRuleForm from './components/AddRuleFrom';
+import ChatBoxTest from './pages/ChatBoxTest';
+import RobotControlPage from './pages/RobotArmControlPage';
+import TurtlebotPage from './pages/TurtlebotPage';
+import TestTurtleBot from './pages/TestTurtleBot';
+import MultiRobotPage from './pages/MultiRobotPage';
 
 const router = createBrowserRouter([
   {
@@ -61,9 +67,33 @@ const router = createBrowserRouter([
             element: <AdministrationPage />,
           },
           {
+            path: '/image-chat-box',
+            element: <ImageChatBoxPage />,
+          },
+          {
+            path: '/chatbox-test',
+            element: <ChatBoxTest />,
+          },
+          {
             path: '/add-rule',
             element: <AddRuleForm />,
           },
+          {
+            path: '/robot-control',
+            element: <RobotControlPage />,
+          },
+          {
+            path: '/turtlebot',
+            element: <TurtlebotPage />,
+          },
+          {
+            path: '/multi-robot',
+            element: <MultiRobotPage />,
+          },
+          // {
+          //   path: '/test-turtlebot',
+          //   element: <TestTurtleBot />,
+          // },
           // {
           //   path: '/capture',
           //   element: <CapturePage />,  sample for add path and element

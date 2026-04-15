@@ -1255,7 +1255,13 @@ const ImageChatBoxPage: React.FC = () => {
 
   // Define model groups for different types of queries
   const textModels = ['gemini-2.5-flash', 'openai-oss', 'gpt5'];
-  const multimodalModels = ['gemini-2.5-pro', 'qwen2.5-VL', 'gemma-3-27b'];
+  const multimodalModels_RAG = ['gemini-2.5-flash-RAG', 'qwen2.5-VL-RAG', 'gemma3-RAG'];
+  const multimodalModels_Original = ['gemini-2.5-pro', 'qwen2.5-VL', 'gemma-3-27b'];
+  const multimodalModels_Finetuning = [
+    'gemini-2.5-pro-finetuned',
+    'qwen2.5-VL-finetuned',
+    'gemma-3-27b-finetuned',
+  ];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const API_BASE_URL = 'http://localhost:5000/api';
@@ -1312,7 +1318,7 @@ const ImageChatBoxPage: React.FC = () => {
 
   const sendTextMessage = async (message: string, model: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/chat`, {
+      const response = await fetch(`${API_BASE_URL}/chat_RAG`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1344,7 +1350,7 @@ const ImageChatBoxPage: React.FC = () => {
       formData.append('conversation_id', conversationId);
       formData.append('model', model);
 
-      const response = await fetch(`${API_BASE_URL}/chat`, {
+      const response = await fetch(`${API_BASE_URL}/chat_RAG`, {
         method: 'POST',
         body: formData,
       });
@@ -1362,7 +1368,7 @@ const ImageChatBoxPage: React.FC = () => {
   };
 
   const sendMultiModelMessage = async (messageText: string, imageFile?: File) => {
-    const modelsToUse = imageFile ? multimodalModels : textModels;
+    const modelsToUse = imageFile ? multimodalModels_RAG : textModels;
     const responses: ModelResponse[] = [];
 
     // Send requests to all models concurrently
@@ -1713,9 +1719,18 @@ const ImageChatBoxPage: React.FC = () => {
               <Option value='gemini-2.5-flash'>Gemini-2.5 Flash(LLM)</Option>
               <Option value='gpt5'>GPT-5(LLM)</Option>
               <Option value='openai-oss'>OpenAI OSS(LLM)</Option>
-              <Option value='gemma-3-4b-local'>gemma-3-4b-local(Multimodal)</Option>
-              <Option value='gemma-3-27b'>Gemma(Multimodal)</Option>
-              <Option value='qwen2.5-VL'>Qwen2.5-VL(Multimodal)</Option>
+
+              <Option value='gemini-2.5-flash-RAG'>gemini-2.5-flash-RAG(Multimodal)</Option>
+              <Option value='gemma3-RAG'>gemma3-RAG(Multimodal)</Option>
+              <Option value='qwen2.5-VL-RAG'>Qwen2.5-VL-RAG(Multimodal)</Option>
+
+              <Option value='gemini-2.5-pro'>gemini-2.5-pro Original(Multimodal)</Option>
+              <Option value='qwen2.5-VL'>Qwen2.5-VL Original(Multimodal)</Option>
+              <Option value='gemma-3-27b'>Gemma Original(Multimodal)</Option>
+
+              <Option value='gemini-2.5-pro-finetuned'>gemini-2.5-pro Finetuned(Multimodal)</Option>
+              <Option value='qwen2.5-VL-finetuned'>Qwen2.5-VL Finetuned(Multimodal)</Option>
+              <Option value='gemma-3-27b-finetuned'>Gemma Finetuned(Multimodal)</Option>
             </Select>
           )}
 

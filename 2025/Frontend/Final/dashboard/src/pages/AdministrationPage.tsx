@@ -320,13 +320,15 @@
 // ------------------------- Version 2 - recent and will be used this------------------
 
 // src/pages/AdministrationPage.tsx
-import React, { useState } from 'react';
-import { Input, Button, Card, message, Row, Col, Spin, Select } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Input, Button, Card, message, Row, Col, Spin, Select, DatePicker } from 'antd';
+import { CalendarOutlined, DownloadOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { Navigate, useNavigate } from 'react-router-dom';
 import AddRuleForm from '../components/AddRuleFrom';
 import RuleTable from '../components/RuleTable';
+import dayjs, { Dayjs } from 'dayjs';
+import { endsWith } from 'lodash-es';
 
 const { Option } = Select;
 
@@ -338,6 +340,9 @@ const AdministrationPage: React.FC = () => {
   const [reportPeriod, setReportPeriod] = useState('weekly');
   const [reportFormat, setReportFormat] = useState('pdf');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [startDate, setStartDate] = useState<Dayjs | null>(dayjs().subtract(7, 'day'));
+  const [useCustomDate, setUseCustomDate] = useState(false);
+  const [reportStatus, setReportStatus] = useState<string[]>([]);
 
   const submitChat = async () => {
     try {
@@ -369,14 +374,92 @@ const AdministrationPage: React.FC = () => {
     }
   };
 
+  const calculateDateRange = () => {
+    if (useCustomDate && startDate) {
+      const start = startDate;
+      let end: Dayjs;
+
+      if (reportPeriod === 'weekly') {
+        end = start.add(7, 'day');
+      } else if (reportPeriod === 'monthly') {
+        end = start.add(30, 'day');
+      } else {
+        end = start;
+      }
+
+      return { start, end };
+    } else {
+      // Default behavior - calculate from current date
+      const end = dayjs();
+      let start: Dayjs;
+
+      if (reportPeriod === 'weekly') {
+        start = end.subtract(7, 'day');
+      } else if (reportPeriod === 'monthly') {
+        start = end.subtract(30, 'day');
+      } else {
+        start = end;
+      }
+
+      return { start, end };
+    }
+  };
+
+  // 2. Generate report with date range
+
   const generateReport = async () => {
+    if (useCustomDate && !startDate) {
+      message.error('Please select a start date');
+      return;
+    }
+
+    const { start, end } = calculateDateRange();
+
+    if (!start || !end) {
+      message.error('Invalid date range');
+      return;
+    }
+
+    // Check if end date is in the future
+    if (end.isAfter(dayjs())) {
+      message.warning('End date is in the future. Report will include data up to today.');
+    }
+
     setIsGeneratingReport(true);
+    setReportStatus([]); // Clear previous status messages
+
+    const eventSource = new EventSource('http://localhost:5000/api/report_status');
+
+    eventSource.onmessage = (event) => {
+      setReportStatus((prevStatus) => [...prevStatus, event.data]);
+    };
+
+    eventSource.onerror = () => {
+      message.error('Failed to connect to the report generation service.');
+      setIsGeneratingReport(false);
+      eventSource.close();
+    };
+
     try {
-      const response = await axios.get('http://localhost:5000/api/report', {
-        params: {
-          period: reportPeriod,
-          format: reportFormat,
-        },
+      // Prepare API parameters
+      const apiParams = {
+        period: reportPeriod,
+        format: reportFormat,
+        // eslint-disable-next-line camelcase
+        use_custom_date: useCustomDate.toString(),
+      };
+
+      // Add custom dates if using custom date mode
+      if (useCustomDate && start && end) {
+        apiParams.start_date = start.format('YYYY-MM-DD');
+        apiParams.end_date = end.format('YYYY-MM-DD');
+      }
+
+      console.log('Generating report with params:', apiParams);
+
+      // Make the API call
+      const response = await axios.get('http://localhost:5000/api/report_bydate', {
+        params: apiParams,
         responseType: 'blob', // Important for file downloads
       });
 
@@ -387,7 +470,7 @@ const AdministrationPage: React.FC = () => {
 
       // Get filename from response headers or create a default one
       const contentDisposition = response.headers['content-disposition'];
-      let filename = `farm_report_${reportPeriod}.pdf`;
+      let filename = `farm_report_${reportPeriod}.pdf`; // `farm_report_${start}_to_${end}.pdf`;
 
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
@@ -402,7 +485,15 @@ const AdministrationPage: React.FC = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      message.success('Report generated and downloaded successfully!');
+      if (useCustomDate) {
+        message.success(
+          `Custom date report requested for ${start.format('MMM DD, YYYY')} to ${end.format(
+            'MMM DD, YYYY',
+          )}. Note: Current backend generates reports from today backwards.`,
+        );
+      } else {
+        message.success('Report generated and downloaded successfully!');
+      }
     } catch (error) {
       console.error('Error generating report:', error);
       if (error.response?.status === 404) {
@@ -414,8 +505,73 @@ const AdministrationPage: React.FC = () => {
       }
     } finally {
       setIsGeneratingReport(false);
+      eventSource.close();
     }
   };
+
+  const { start: calculatedStart, end: calculatedEnd } = calculateDateRange();
+
+  // 1. Generate report function without date range
+  // const generateReport = async () => {
+  //   setIsGeneratingReport(true);
+  //   try {
+  //     const response = await axios.get('http://localhost:5000/api/report', {
+  //       params: {
+  //         period: reportPeriod,
+  //         format: reportFormat,
+  //       },
+  //       responseType: 'blob', // Important for file downloads
+  //     });
+
+  //     // Create blob link to download
+  //     const url = window.URL.createObjectURL(new Blob([response.data]));
+  //     const link = document.createElement('a');
+  //     link.href = url;
+
+  //     // Get filename from response headers or create a default one
+  //     const contentDisposition =
+  //       response.headers['Content-Disposition'] || response.headers['content-disposition'];
+  //     let filename = `farm_report_${reportPeriod}.pdf`;
+
+  //     if (contentDisposition) {
+  //       const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+  //       if (filenameMatch?.[1]) {
+  //         filename = filenameMatch[1].replace(/['"]/g, ''); // Remove quotes if present
+  //       }
+  //     }
+
+  //     console.log('Content-Disposition:', contentDisposition);
+
+  //     link.setAttribute('download', filename);
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     link.remove();
+  //     window.URL.revokeObjectURL(url);
+
+  //     message.success('Report generated and downloaded successfully!');
+  //   } catch (error) {
+  //     console.error('Error generating report:', error);
+  //     if (
+  //       typeof error === 'object' &&
+  //       error !== null &&
+  //       'response' in error &&
+  //       typeof (error as any).response === 'object'
+  //     ) {
+  //       const response = (error as any).response;
+  //       if (response.status === 404) {
+  //         message.error('No data available for the specified period');
+  //       } else if (response.status === 400) {
+  //         message.error('Invalid parameters specified');
+  //       } else {
+  //         message.error('Failed to generate report');
+  //       }
+  //     } else {
+  //       message.error('Failed to generate report');
+  //     }
+  //   } finally {
+  //     setIsGeneratingReport(false);
+  //   }
+  // };
 
   return (
     <div style={{ padding: 20, overflow: 'scroll', width: '100%', height: '100vh' }}>
@@ -460,8 +616,8 @@ const AdministrationPage: React.FC = () => {
           </Col>
         </Row>
       </Card>
-
-      <Card title='Generate Environmental Report' style={{ marginTop: 20 }}>
+      {/* This is code for generating environmental report without date range */}
+      {/* <Card title='Generate Environmental Report' style={{ marginTop: 20 }}>
         <Row gutter={16} align='middle'>
           <Col span={8}>
             <div style={{ marginBottom: 8 }}>
@@ -508,6 +664,149 @@ const AdministrationPage: React.FC = () => {
             <li>Graphical visualizations</li>
             <li>AI-generated insights and recommendations</li>
           </ul>
+        </div>
+      </Card> */}
+
+      {/* This is code for generating environmental report with date range */}
+      <Card title='Generate Environmental Report' style={{ marginTop: 20 }}>
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={24}>
+            <div style={{ marginBottom: 16 }}>
+              <Button
+                type={!useCustomDate ? 'primary' : 'default'}
+                onClick={() => setUseCustomDate(false)}
+                style={{ marginRight: 8 }}
+              >
+                Default Report (from today backwards)
+              </Button>
+              <Button
+                type={useCustomDate ? 'primary' : 'default'}
+                onClick={() => setUseCustomDate(true)}
+              >
+                Custom Start Date Report
+              </Button>
+            </div>
+          </Col>
+        </Row>
+
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          {useCustomDate && (
+            <Col span={8}>
+              <div style={{ marginBottom: 8 }}>
+                <strong>Start Date:</strong>
+              </div>
+              <DatePicker
+                value={startDate}
+                onChange={setStartDate}
+                style={{ width: '100%' }}
+                placeholder='Select start date'
+                suffixIcon={<CalendarOutlined />}
+                disabledDate={(current) => current && current > dayjs().endOf('day')}
+              />
+            </Col>
+          )}
+          <Col span={useCustomDate ? 8 : 12}>
+            <div style={{ marginBottom: 8 }}>
+              <strong>Report Period:</strong>
+            </div>
+            <Select value={reportPeriod} onChange={setReportPeriod} style={{ width: '100%' }}>
+              <Option value='weekly'>Weekly (7 days)</Option>
+              <Option value='monthly'>Monthly (30 days)</Option>
+            </Select>
+          </Col>
+          <Col span={useCustomDate ? 8 : 12}>
+            <div style={{ marginBottom: 8 }}>
+              <strong>Report Format:</strong>
+            </div>
+            <Select value={reportFormat} onChange={setReportFormat} style={{ width: '100%' }}>
+              <Option value='pdf'>PDF</Option>
+            </Select>
+          </Col>
+        </Row>
+
+        {calculatedStart && calculatedEnd && (
+          <Card
+            size='small'
+            style={{
+              backgroundColor: useCustomDate ? '#fff7e6' : '#f6f8fa',
+              border: useCustomDate ? '1px solid #ffd591' : '1px solid #e1e4e8',
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ fontSize: '14px', color: '#666' }}>
+              <strong>
+                Date Range {useCustomDate ? '(Preview - Custom)' : '(Current Backend Logic)'}:
+              </strong>{' '}
+              {calculatedStart?.format('MMM DD, YYYY')} to {calculatedEnd?.format('MMM DD, YYYY')}
+              <br />
+              <strong>Duration:</strong> {reportPeriod === 'weekly' ? '7 days' : '30 days'}
+              {useCustomDate && (
+                <div style={{ color: '#d46b08', marginTop: 4 }}>
+                  <strong>Note:</strong> Custom dates require backend modification. Currently
+                  generates from today backwards.
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        <Row gutter={16}>
+          <Col span={24}>
+            <Button
+              type='primary'
+              onClick={generateReport}
+              disabled={isGeneratingReport || (useCustomDate && !startDate)}
+              icon={<DownloadOutlined />}
+              size='large'
+              style={{ width: '100%' }}
+            >
+              {isGeneratingReport ? <Spin size='small' /> : 'Generate & Download Report'}
+            </Button>
+          </Col>
+        </Row>
+
+        {isGeneratingReport && (
+          <div style={{ marginTop: 16, padding: 12, border: '1px solid #d9d9d9', borderRadius: 4 }}>
+            <p>
+              <strong>Report Generation Status:</strong>
+            </p>
+            {reportStatus.map((status, index) => (
+              <p key={index}>{status}</p>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: 16, color: '#666', fontSize: '14px' }}>
+          <p>
+            <strong>Report includes:</strong>
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            <li>
+              Environmental data analysis (temperature, humidity, light, soil humidity, water level,
+              steam)
+            </li>
+            <li>Statistical summaries and trends over the selected period</li>
+            <li>Graphical visualizations for each sensor metric</li>
+            <li>AI-generated insights and recommendations</li>
+          </ul>
+
+          {useCustomDate && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 12,
+                backgroundColor: '#fff7e6',
+                borderRadius: 4,
+                border: '1px solid #ffd591',
+              }}
+            >
+              <p style={{ margin: 0, color: '#d46b08' }}>
+                <strong>Custom Date Feature:</strong> To fully implement custom start dates, your
+                backend needs modification. The current version will generate reports based on the
+                current date going backwards, regardless of the custom start date selected.
+              </p>
+            </div>
+          )}
         </div>
       </Card>
 

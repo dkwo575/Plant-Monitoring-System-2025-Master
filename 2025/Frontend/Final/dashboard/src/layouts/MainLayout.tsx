@@ -39,6 +39,37 @@ function MainLayout() {
       label: 'Image data',
       key: 'image',
     },
+    {
+      label: 'admin-login',
+      key: 'admin-login',
+      // onClick: () => navigate('/admin-login'),
+    },
+    {
+      label: 'Chat with Image',
+      key: 'image-chat-box',
+    },
+    // {
+    //   label: 'chatbox-test',
+    //   key: 'chatbox-test',
+    //   // onClick: () => navigate('/chatbox-test'),
+    // },
+    // { label: 'Robot Control', key: 'robot-control' },
+    {
+      label: 'TurtleBot',
+      key: 'turtlebot',
+    },
+    // {
+    //   label: 'Test TurtleBot',
+    //   key: 'test-turtlebot',
+    // },
+    {
+      label: 'Multi-Robot control',
+      key: 'multi-robot',
+    },
+    // {
+    //   label: 'Administration',
+    //   key: 'admin',
+    // },
     // {
     //   label: 'Capture Image',
     //   key: 'capture',
@@ -54,6 +85,18 @@ function MainLayout() {
       navigate('/image');
       // } else if (e.key === 'capture') {
       //   navigate('/capture');
+    } else if (e.key === 'admin-login') {
+      navigate('/admin-login');
+    } else if (e.key === 'image-chat-box') {
+      navigate('/image-chat-box');
+    } else if (e.key === 'chatbox-test') {
+      navigate('/chatbox-test');
+    } else if (e.key === 'robot-control') {
+      navigate('/robot-control');
+    } else if (e.key === 'turtlebot') {
+      navigate('/turtlebot');
+    } else if (e.key === 'multi-robot') {
+      navigate('/multi-robot');
     } else {
       navigate(`/building/${e.key}`);
     }
